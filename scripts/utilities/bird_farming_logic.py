@@ -23,7 +23,6 @@ class BirdFarmer(DemonicBeastFarmer):
             starting_state=starting_state,
             max_floor_3_clears=num_floor_3_clears,
             demonic_beast_image=vio.hraesvelgr,
-            floor_cleared_images=[vio.floor_3_cleared_bird, vio.floor_3_cleared_2_bird],
             logger=logger,
             password=password,
             do_dailies=do_dailies,

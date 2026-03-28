@@ -28,7 +28,6 @@ class DeerFarmer(DemonicBeastFarmer):
             max_floor_3_clears=max_floor_3_clears,
             reset_after_defeat=reset_after_defeat,
             demonic_beast_image=vio.eikthyrnir,
-            floor_cleared_images=[vio.floor_3_cleared_deer, vio.floor_3_cleared_2_deer],
             logger=logger,
             password=password,
             do_dailies=do_dailies,

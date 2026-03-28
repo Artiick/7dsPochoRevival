@@ -99,7 +99,6 @@ cross = MultiVision(
     image_name="cross",
 )
 pause_fight = Vision("pause_fight.png")
-episode_clear = Vision("episode_clear.png")
 continue_fight = Vision("continue.png")
 annoying_chat_popup = Vision("annoying_chat_popup.png")
 change_stats = MultiVision(
@@ -159,6 +158,9 @@ floor_3_cleared_db = MultiVision(
     # Deer floor 3 cleared images
     "demonic_beasts\\floor_3_cleared_deer.png",
     "demonic_beasts\\floor_3_cleared_2_deer.png",
+    # Dogs floor 3 cleared images
+    "demonic_beasts\\floor_3_cleared_skollandhati_cleaned.png",
+    "demonic_beasts\\floor_3_cleared_2_skollandhati.png",
     image_name="floor_3_cleared_db",
 )
 available_floor = Vision("demonic_beasts\\available_floor.png")
@@ -168,8 +170,7 @@ three_empty_slots = Vision("demonic_beasts\\three_slots.png")
 two_empty_slots = Vision("demonic_beasts\\two_slots.png")
 weekly_mission = Vision("demonic_beasts\\lazy_weekly_mission.png")
 skollandhati = Vision("demonic_beasts\\skollandhati.png")
-skollandhati_cleaned = Vision("demonic_beasts\\floor_3_cleared_skollandhati_cleaned.png")
-floor_3_cleared_2_skollandhati = Vision("demonic_beasts\\floor_3_cleared_2_skollandhati.png")
+floor_3_cleared_dogs = Vision("demonic_beasts\\floor_3_cleared_skollandhati_cleaned.png")
 guaranteed_reward = Vision("demonic_beasts\\guaranteed_reward.png")
 meli_aoe = Vision("demonic_beasts\\meli_aoe.png")
 meli_ult = Vision("demonic_beasts\\meli_ult.png")
@@ -183,10 +184,6 @@ first_reward = Vision("demonic_beasts\\first_reward.png")
 
 # For Deer
 eikthyrnir = Vision("deer\\Eikthyrnir.png")
-floor_3_cleared_2_deer = Vision("demonic_beasts\\floor_3_cleared_2_deer.png")
-floor_3_cleared_deer = Vision("demonic_beasts\\floor_3_cleared_deer.png")
-floor_3_cleared_2_bird = Vision("demonic_beasts\\floor_3_cleared_2_bird.png")
-floor_3_cleared_bird = Vision("demonic_beasts\\floor_3_cleared_bird.png")
 red_buff = MultiVision(
     "deer\\red_buff.png",
     "deer\\red_buff_tiny.png",
@@ -344,6 +341,16 @@ showdown = Vision("final_boss\\showdown.png")
 fb_aut_off = Vision("final_boss\\auto_off.png")
 failed = Vision("final_boss\\failed.png")
 
+# For Legendary Boss
+legendary_boss_menu = Vision("legendary_boss\\legendary_boss_menu.png")
+legendary_boss_roxy = Vision("legendary_boss\\lb_roxy.png")
+legendary_boss_extreme = Vision("legendary_boss\\lb_extreme.png")
+legendary_boss_hell = Vision("legendary_boss\\lb_hell.png")
+legendary_boss_challenge = Vision("legendary_boss\\lb_challenge.png")
+legendary_boss_left_arrow = Vision("legendary_boss\\lb_left.png")
+legendary_boss_right_arrow = Vision("legendary_boss\\lb_right.png")
+legendary_boss_min_button = Vision("legendary_boss\\lb_min_btn.png")
+legendary_boss_final_score = Vision("legendary_boss\\lb_final_score.png")
 
 # For demon farming
 boss_menu = Vision("demons\\demons.jpg")

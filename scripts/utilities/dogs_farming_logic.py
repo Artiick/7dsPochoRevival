@@ -30,7 +30,6 @@ class DogsFarmer(DemonicBeastFarmer):
             max_floor_3_clears=max_floor_3_clears,
             reset_after_defeat=reset_after_defeat,
             demonic_beast_image=vio.skollandhati,
-            floor_cleared_images=[vio.skollandhati_cleaned, vio.floor_3_cleared_2_skollandhati],
             logger=logger,
             password=password,
             do_dailies=do_dailies,

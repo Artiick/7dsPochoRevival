@@ -46,13 +46,15 @@ class DemonicBeastFarmer(IFarmer, abc.ABC):
     num_victories = 0
     num_losses = 0
 
+    # Counter for beast search swipe attempts
+    _swipe_attempts = 0
+
     def __init__(
         self,
         starting_state=States.GOING_TO_DB,
         max_stamina_pots="inf",
         max_floor_3_clears="inf",
         demonic_beast_image: vio.Vision | None = None,
-        floor_cleared_images: list | None = None,
         reset_after_defeat=False,
         password: str | None = None,
         do_dailies=False,
@@ -76,8 +78,6 @@ class DemonicBeastFarmer(IFarmer, abc.ABC):
         # Save the image we want
         self.db_image = demonic_beast_image
 
-        # Images that indicate the floor was cleared (used to trigger scroll)
-        self._floor_cleared_images = floor_cleared_images or []
 
         # Save the logger
         self.logger = logger
@@ -108,8 +108,6 @@ class DemonicBeastFarmer(IFarmer, abc.ABC):
         IFarmer.daily_farmer.set_daily_pvp(True)
         IFarmer.daily_farmer.add_complete_callback(self.dailies_complete_callback)
 
-        # Counter for beast search swipe attempts
-        self._swipe_attempts = 0
 
     def exit_message(self):
         self.logger.info(
@@ -123,7 +121,7 @@ class DemonicBeastFarmer(IFarmer, abc.ABC):
         """This should be the original state. Let's go to the Demonic Beast menu"""
         screenshot, window_location = capture_window()
 
-        if DemonicBeastFarmer.current_floor == 1 and any(find(img, screenshot) for img in self._floor_cleared_images):
+        if DemonicBeastFarmer.current_floor == 1 and find(vio.floor_3_cleared_db, screenshot):
             print("Detected floor cleared image, moving to RESETTING_DB...")
             self.current_state = States.RESETTING_DB
             return
