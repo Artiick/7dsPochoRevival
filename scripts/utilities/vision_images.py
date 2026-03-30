@@ -155,12 +155,15 @@ floor_3_cleared_db = MultiVision(
     # Bird floor 3 cleared images
     "demonic_beasts\\floor_3_cleared_bird.png",
     "demonic_beasts\\floor_3_cleared_2_bird.png",
+    "demonic_beasts\\floor_3_cleared_bird_2.png",
     # Deer floor 3 cleared images
     "demonic_beasts\\floor_3_cleared_deer.png",
     "demonic_beasts\\floor_3_cleared_2_deer.png",
+    "demonic_beasts\\floor_3_cleared_deer_2.png",
     # Dogs floor 3 cleared images
     "demonic_beasts\\floor_3_cleared_skollandhati_cleaned.png",
     "demonic_beasts\\floor_3_cleared_2_skollandhati.png",
+    "demonic_beasts\\floor_3_cleared_skollandhati_cleaned_2.png",
     image_name="floor_3_cleared_db",
 )
 available_floor = Vision("demonic_beasts\\available_floor.png")

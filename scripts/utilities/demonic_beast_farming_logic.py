@@ -346,7 +346,7 @@ class DemonicBeastFarmer(IFarmer, abc.ABC):
         # Click on the confirmation window...
         if find_and_click(vio.ok_main_button, screenshot, window_location) or find(vio.set_db_party, screenshot):
             # Scroll down slightly so the floor image becomes detectable again
-            drag_im((530, 530), (530, 430), window_location, sleep_after_click=3.0, drag_duration=1.2)
+            drag_im((530, 530), (530, 430), window_location, sleep_after_click=1.0, drag_duration=1.2)
             print("Moving to the original state, GOING_TO_DB")
             self.current_state = States.GOING_TO_DB
             return
