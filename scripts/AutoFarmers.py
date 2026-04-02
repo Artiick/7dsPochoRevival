@@ -93,6 +93,11 @@ REQUIREMENTS = {
 Play with your gears to guarantee this.<br>
 • NO SKULD</p>
     """,
+    "Dogs Floor 4": """
+<p><strong>Requirements:</strong><br>
+• Uses the scripted Dogs Floor 4 team (Escalin, Roxy, Nasiens, Thonar) and phase-specific card logic.<br>
+• Template images under <code>scripts/images/dogs/</code> must match your resolution and UI; replace placeholders as needed.</p>
+    """,
     "Dogs Farmer": """
 <p><strong>Requirements:</strong><br>
 • Any team works</p>
@@ -170,6 +175,7 @@ FARMER_IMAGES = {
     "Bird Floor 4": "bird_floor_4.jpeg",
     "Deer Farmer": "deer_farmer.png",
     "Deer Floor 4": "deer_floor_4.png",
+    "Dogs Floor 4": "dogs_farmer.jpeg",
     "Tower Trials": "tower_trials_farmer.jpg",
     "Dogs Farmer": "dogs_farmer.jpeg",
     "Snake Farmer": "snake_farmer.png",
@@ -248,6 +254,15 @@ FARMERS = [
     {
         "name": "Deer Floor 4",
         "script": "DeerFloor4Farmer.py",
+        "args": [
+            {"name": "--password", "label": "Password", "type": "text", "default": ""},
+            {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
+            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
+        ],
+    },
+    {
+        "name": "Dogs Floor 4",
+        "script": "DogsFloor4Farmer.py",
         "args": [
             {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
