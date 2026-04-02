@@ -81,15 +81,15 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
     ESCALIN_TEMPLATES = ("escalin_st", "escalin_aoe", "escalin_ult")
     ESCALIN_NON_ULT_TEMPLATES = ("escalin_st", "escalin_aoe")
-    ROXY_TEMPLATES = ("dogs_roxy_st", "dogs_roxy_aoe", "dogs_roxy_ult")
-    ROXY_NON_ULT_TEMPLATES = ("dogs_roxy_st", "dogs_roxy_aoe")
+    ROXY_TEMPLATES = ("roxy_st", "roxy_aoe", "roxy_ult")
+    ROXY_NON_ULT_TEMPLATES = ("roxy_st", "roxy_aoe")
     HEAVY_DAMAGE_TEMPLATES = (
         "escalin_st",
         "escalin_aoe",
         "escalin_ult",
-        "dogs_roxy_st",
-        "dogs_roxy_aoe",
-        "dogs_roxy_ult",
+        "roxy_st",
+        "roxy_aoe",
+        "roxy_ult",
         "thonar_ult",
     )
     NASI_TEMPLATES = ("dogs_nasi_heal", "dogs_nasi_stun", "dogs_nasi_ult")
@@ -203,7 +203,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         if card_turn == 0:
             return self._best_matching_card(hand_of_cards, ("thonar_stance",))
         if card_turn == 1:
-            return self._best_matching_card(hand_of_cards, ("dogs_roxy_aoe",))
+            return self._best_matching_card(hand_of_cards, ("roxy_aoe",))
         if card_turn == 2:
             return self._best_matching_card(hand_of_cards, ("escalin_aoe",))
         if card_turn == 3:
@@ -231,11 +231,11 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         if card_turn == 0:
             roxy_st_idx = self._best_matching_card_with_ranks(
                 hand_of_cards,
-                ("dogs_roxy_st",),
+                ("roxy_st",),
                 {CardRanks.SILVER, CardRanks.GOLD},
             )
             if roxy_st_idx == -1:
-                roxy_st_idx = self._best_matching_card(hand_of_cards, ("dogs_roxy_st",))
+                roxy_st_idx = self._best_matching_card(hand_of_cards, ("roxy_st",))
             if roxy_st_idx != -1:
                 print(f"Phase 1 turn {scripted_turn}: opening with roxy_st.")
                 return roxy_st_idx
@@ -277,9 +277,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             ("dogs_nasi_heal",),
             ("dogs_nasi_stun",),
             ("thonar_gauge",),
-            ("dogs_roxy_st",),
-            ("dogs_roxy_aoe",),
-            ("dogs_roxy_ult",),
+            ("roxy_st",),
+            ("roxy_aoe",),
+            ("roxy_ult",),
             ("escalin_aoe",),
             ("escalin_ult",),
             ("thonar_ult",),
@@ -347,7 +347,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             ("dogs_nasi_heal",),
             ("dogs_nasi_stun",),
             ("thonar_gauge",),
-            ("dogs_roxy_st",),
+            ("roxy_st",),
         ]
         for template_names in low_value_groups:
             candidate_ids = [
@@ -493,7 +493,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if opener != -1:
                 return opener
 
-            for template_names in [("escalin_ult",), ("escalin_aoe",), ("dogs_roxy_aoe",)]:
+            for template_names in [("escalin_ult",), ("escalin_aoe",), ("roxy_aoe",)]:
                 card_idx = self._best_allowed_card(hand_of_cards, template_names)
                 if card_idx != -1:
                     print("Phase 2 turn 3: right-dog taunt is expected, so prioritizing AOE damage.")
@@ -507,10 +507,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         for template_names in [
             ("escalin_ult",),
             ("escalin_aoe",),
-            ("dogs_roxy_aoe",),
+            ("roxy_aoe",),
             ("escalin_st",),
-            ("dogs_roxy_st",),
-            ("dogs_roxy_ult",),
+            ("roxy_st",),
+            ("roxy_ult",),
             ("thonar_ult",),
             ("thonar_stance",),
             ("dogs_nasi_stun",),
@@ -522,10 +522,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         for template_names in [
             ("escalin_ult",),
             ("escalin_aoe",),
-            ("dogs_roxy_aoe",),
+            ("roxy_aoe",),
             ("escalin_st",),
-            ("dogs_roxy_st",),
-            ("dogs_roxy_ult",),
+            ("roxy_st",),
+            ("roxy_ult",),
             ("thonar_ult",),
             ("thonar_stance",),
             ("dogs_nasi_stun",),
@@ -824,10 +824,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             ("thonar_stance",),
             ("escalin_st",),
             ("escalin_aoe",),
-            ("dogs_roxy_st",),
-            ("dogs_roxy_aoe",),
+            ("roxy_st",),
+            ("roxy_aoe",),
             ("escalin_ult",),
-            ("dogs_roxy_ult",),
+            ("roxy_ult",),
             ("thonar_ult",),
         ]:
             move_action = self._move_card_once(hand_of_cards, template_names)
@@ -959,7 +959,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         if card_turn == 0:
             roxy_st_idx = self._best_matching_card_with_ranks(
                 hand_of_cards,
-                ("dogs_roxy_st",),
+                ("roxy_st",),
                 {CardRanks.SILVER, CardRanks.GOLD},
             )
             if roxy_st_idx != -1:
@@ -1207,7 +1207,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if card.card_type in (CardTypes.DISABLED, CardTypes.NONE, CardTypes.GROUND):
                 continue
 
-            if self._card_matches_any(card, ("escalin_ult", "escalin_aoe", "dogs_roxy_aoe")):
+            if self._card_matches_any(card, ("escalin_ult", "escalin_aoe", "roxy_aoe")):
                 options.append(
                     {
                         "idx": idx,
@@ -1233,7 +1233,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     )
                 continue
 
-            if self._card_matches_any(card, ("dogs_roxy_st", "dogs_roxy_ult", "thonar_ult")):
+            if self._card_matches_any(card, ("roxy_st", "roxy_ult", "thonar_ult")):
                 for target_side in alive_target_sides:
                     options.append(
                         {
@@ -1260,9 +1260,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             "escalin_ult",
             "escalin_aoe",
             "escalin_st",
-            "dogs_roxy_aoe",
-            "dogs_roxy_st",
-            "dogs_roxy_ult",
+            "roxy_aoe",
+            "roxy_st",
+            "roxy_ult",
             "thonar_ult",
         ):
             if self._card_matches_any(card, (template_name,)):
@@ -1293,10 +1293,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         priorities = {
             "escalin_ult": 7,
             "escalin_aoe": 6,
-            "dogs_roxy_aoe": 6,
+            "roxy_aoe": 6,
             "escalin_st": 5,
-            "dogs_roxy_st": 4,
-            "dogs_roxy_ult": 3,
+            "roxy_st": 4,
+            "roxy_ult": 3,
             "thonar_ult": 2,
             "unknown": 0,
         }
@@ -1874,7 +1874,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     def _register_play_action(self, unit_name: str, card: Card):
         ult_templates = {
             "escalin": ("escalin_ult",),
-            "roxy": ("dogs_roxy_ult",),
+            "roxy": ("roxy_ult",),
             "nasi": ("dogs_nasi_ult",),
             "thonar": ("thonar_ult",),
         }
@@ -1957,7 +1957,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             )
             return
 
-        if self._card_matches_any(card, ("escalin_ult", "escalin_aoe", "dogs_roxy_aoe")):
+        if self._card_matches_any(card, ("escalin_ult", "escalin_aoe", "roxy_aoe")):
             caps = self.PHASE3_DAMAGE_CAP if self._phase3_is_gimmick_damage_active() else self.PHASE3_PRE_GIMMICK_DAMAGE_CAP
             add_roxy_bonus = not self._card_matches_any(card, ("escalin_ult",))
             left_damage = self._phase3_damage_value("left", caps["left"], add_roxy_bonus)
@@ -1971,7 +1971,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             self._apply_phase3_escalin_st_damage(target_side)
             return
 
-        if self._card_matches_any(card, ("dogs_roxy_st",)):
+        if self._card_matches_any(card, ("roxy_st",)):
             resolved_target = target_side or self._phase3_side_with_highest_remaining_hp()
             caps = self.PHASE3_DAMAGE_CAP if self._phase3_is_gimmick_damage_active() else self.PHASE3_PRE_GIMMICK_DAMAGE_CAP
             damage_amount = self._phase3_damage_value(resolved_target, caps[resolved_target], add_roxy_bonus=True)
@@ -1982,7 +1982,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             )
             return
 
-        if self._card_matches_any(card, ("dogs_roxy_ult", "thonar_ult")):
+        if self._card_matches_any(card, ("roxy_ult", "thonar_ult")):
             resolved_target = target_side or self._phase3_side_with_highest_remaining_hp()
             caps = self.PHASE3_DAMAGE_CAP if self._phase3_is_gimmick_damage_active() else self.PHASE3_PRE_GIMMICK_DAMAGE_CAP
             self._apply_phase3_single_target_damage(resolved_target, damage_amount=caps[resolved_target])
