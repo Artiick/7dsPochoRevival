@@ -677,18 +677,18 @@ class SettingsTab(QWidget):
         layout.setSpacing(14)
 
         intro = QLabel(
-            "<strong>App settings</strong> (all in <code>scripts/config/config.yaml</code>): "
-            "ntfy topic, stuck alerts, game password, and post-logout login timing. "
-            "Do not commit this file if it contains secrets you care about."
+            "<strong>Settings</strong> — fill in what you need, then click <strong>Save</strong>. "
+            "<strong>Load saved</strong> puts back whatever was last saved (drops unsaved edits)."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
-        ntfy_group = QGroupBox("Phone notifications (ntfy)")
+        ntfy_group = QGroupBox("Phone notifications")
         ntfy_outer = QVBoxLayout()
         help_ntfy = QLabel(
-            "Subscribe to the same topic in the ntfy app. Leave the topic empty to disable push. "
-            "Anyone who knows the topic name can send messages to it—pick a long, random name."
+            "Install the free ntfy app on your phone and create a topic. "
+            "Type the <em>same</em> topic name here. Leave blank to turn phone alerts off. "
+            "Pick something long and random so only you get the messages."
         )
         help_ntfy.setWordWrap(True)
         help_ntfy.setStyleSheet("color: #555;")
@@ -702,7 +702,7 @@ class SettingsTab(QWidget):
         ntfy_outer.addLayout(topic_row)
 
         ntfy_btn_row = QHBoxLayout()
-        ntfy_open_btn = QPushButton("Open ntfy website")
+        ntfy_open_btn = QPushButton("Open ntfy (get the app)")
         ntfy_open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://ntfy.sh/")))
         self.test_notif_btn = QPushButton("Send test notification")
         self.test_notif_btn.clicked.connect(self.on_test_notification)
@@ -713,14 +713,14 @@ class SettingsTab(QWidget):
         ntfy_group.setLayout(ntfy_outer)
         layout.addWidget(ntfy_group)
 
-        stuck_group = QGroupBox("Stuck detection alerts")
+        stuck_group = QGroupBox("If the bot seems stuck")
         stuck_form = QFormLayout()
 
         self.stuck_spin = QSpinBox()
         self.stuck_spin.setRange(0, 1440)
         self.stuck_spin.setSuffix(" min")
-        stuck_form.addRow("Stuck timeout:", self.stuck_spin)
-        stuck_hint = QLabel("0 disables stuck detection.")
+        stuck_form.addRow("How long before warning you:", self.stuck_spin)
+        stuck_hint = QLabel("0 = off (no stuck warnings).")
         stuck_hint.setWordWrap(True)
         stuck_hint.setStyleSheet("color: #555; font-size: 11px;")
         stuck_form.addRow("", stuck_hint)
@@ -728,16 +728,16 @@ class SettingsTab(QWidget):
         self.cooldown_spin = QSpinBox()
         self.cooldown_spin.setRange(0, 120)
         self.cooldown_spin.setSuffix(" min")
-        stuck_form.addRow("Alert cooldown:", self.cooldown_spin)
-        cd_hint = QLabel("Effective gap between alerts is at least 30 seconds (enforced in code).")
+        stuck_form.addRow("Space between repeat warnings:", self.cooldown_spin)
+        cd_hint = QLabel("Won't ping faster than about every 30 seconds.")
         cd_hint.setWordWrap(True)
         cd_hint.setStyleSheet("color: #555; font-size: 11px;")
         stuck_form.addRow("", cd_hint)
 
         self.max_notif_spin = QSpinBox()
         self.max_notif_spin.setRange(0, 50)
-        stuck_form.addRow("Max alerts per incident:", self.max_notif_spin)
-        max_hint = QLabel("0 means no stuck alerts for an incident.")
+        stuck_form.addRow("Max warnings per stuck episode:", self.max_notif_spin)
+        max_hint = QLabel("0 = no warnings for that episode.")
         max_hint.setWordWrap(True)
         max_hint.setStyleSheet("color: #555; font-size: 11px;")
         stuck_form.addRow("", max_hint)
@@ -745,13 +745,12 @@ class SettingsTab(QWidget):
         stuck_group.setLayout(stuck_form)
         layout.addWidget(stuck_group)
 
-        pwd_group = QGroupBox("Game password and re-login")
+        pwd_group = QGroupBox("Game login")
         pwd_outer = QVBoxLayout()
         pwd_help = QLabel(
-            "Stored as plaintext in <code>config.yaml</code> as <code>game_password</code>. "
-            "When the game shows the login screen after a disconnect or logout, the bot uses this password to sign back in. "
-            "Password-capable farmers get <code>--password</code> from the text below (or from the saved file if this field is empty). "
-            "After logout, the bot waits <strong>Wait before login retry</strong> minutes before attempting to log in again."
+            "If the game logs you out, the bot can try to sign back in using this password. "
+            "Leave the password blank if you don't want that. "
+            "After a logout, the bot waits the number of minutes below before it tries to log in."
         )
         pwd_help.setWordWrap(True)
         pwd_help.setStyleSheet("color: #555;")
@@ -760,14 +759,14 @@ class SettingsTab(QWidget):
         pwd_row.addWidget(QLabel("Password:"))
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.Password)
-        self.password_edit.setPlaceholderText("Empty uses game_password from file only")
+        self.password_edit.setPlaceholderText("Same as in the game (optional)")
         pwd_row.addWidget(self.password_edit)
         pwd_outer.addLayout(pwd_row)
         login_wait_form = QFormLayout()
         self.login_wait_spin = QSpinBox()
         self.login_wait_spin.setRange(1, 1440)
         self.login_wait_spin.setSuffix(" min")
-        login_wait_form.addRow("Wait before login retry:", self.login_wait_spin)
+        login_wait_form.addRow("Minutes to wait after logout before login:", self.login_wait_spin)
         pwd_outer.addLayout(login_wait_form)
         pwd_group.setLayout(pwd_outer)
         layout.addWidget(pwd_group)
@@ -776,7 +775,7 @@ class SettingsTab(QWidget):
         self.save_btn = QPushButton("Save")
         self.save_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
         self.save_btn.clicked.connect(self.on_save)
-        self.reload_btn = QPushButton("Reload from disk")
+        self.reload_btn = QPushButton("Load saved")
         self.reload_btn.clicked.connect(self.reload_from_disk)
         actions.addWidget(self.save_btn)
         actions.addWidget(self.reload_btn)
@@ -788,7 +787,7 @@ class SettingsTab(QWidget):
         layout.addWidget(self.status_label)
 
         footnote = QLabel(
-            "Farmers already running keep their old stuck-detection and login-wait settings until you stop and start them again."
+            "Already running a farmer? Stop it and press Start again so it picks up new settings."
         )
         footnote.setWordWrap(True)
         footnote.setStyleSheet("color: #666; font-size: 11px;")
@@ -818,7 +817,7 @@ class SettingsTab(QWidget):
                 pw = legacy
         self.password_edit.setText("" if pw is None else str(pw))
         self.login_wait_spin.setValue(self._int_from_data(data, "minutes_to_wait_before_login"))
-        self.status_label.setText("Reloaded from disk.")
+        self.status_label.setText("Loaded saved settings.")
         self.status_label.setStyleSheet("color: #666;")
 
     def on_save(self):
