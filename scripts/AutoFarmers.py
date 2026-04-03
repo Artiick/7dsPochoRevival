@@ -47,6 +47,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QTabWidget,
     QTextEdit,
     QVBoxLayout,
@@ -55,7 +56,14 @@ from PyQt5.QtWidgets import (
 
 # Import the window resize function
 from utilities.capture_window import capture_window, resize_7ds_window
-from utilities.utilities import get_pause_flag_path
+from utilities.utilities import (
+    APP_CONFIG_DEFAULTS,
+    config,
+    get_pause_flag_path,
+    load_full_config_dict,
+    save_config_updates,
+    test_ntfy_connection,
+)
 
 # Free software message to display in GUI
 FREE_SOFTWARE_MESSAGE = """=====================================================================
@@ -651,6 +659,150 @@ class AboutTab(QWidget):
         callback(exit_code)
 
 
+class SettingsTab(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+        self.reload_from_disk()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 20, 30, 20)
+        layout.setSpacing(14)
+
+        intro = QLabel(
+            "<strong>App settings</strong> (stored in <code>scripts/config/config.yaml</code>)."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        ntfy_group = QGroupBox("Phone notifications (ntfy)")
+        ntfy_outer = QVBoxLayout()
+        help_ntfy = QLabel(
+            "Subscribe to the same topic in the ntfy app. Leave the topic empty to disable push. "
+            "Anyone who knows the topic name can send messages to it—pick a long, random name."
+        )
+        help_ntfy.setWordWrap(True)
+        help_ntfy.setStyleSheet("color: #555;")
+        ntfy_outer.addWidget(help_ntfy)
+
+        topic_row = QHBoxLayout()
+        topic_row.addWidget(QLabel("Topic:"))
+        self.topic_edit = QLineEdit()
+        self.topic_edit.setPlaceholderText("e.g. 7ds_farmer_myname_abc123")
+        topic_row.addWidget(self.topic_edit)
+        ntfy_outer.addLayout(topic_row)
+
+        ntfy_btn_row = QHBoxLayout()
+        ntfy_open_btn = QPushButton("Open ntfy website")
+        ntfy_open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://ntfy.sh/")))
+        self.test_notif_btn = QPushButton("Send test notification")
+        self.test_notif_btn.clicked.connect(self.on_test_notification)
+        ntfy_btn_row.addWidget(ntfy_open_btn)
+        ntfy_btn_row.addWidget(self.test_notif_btn)
+        ntfy_btn_row.addStretch(1)
+        ntfy_outer.addLayout(ntfy_btn_row)
+        ntfy_group.setLayout(ntfy_outer)
+        layout.addWidget(ntfy_group)
+
+        stuck_group = QGroupBox("Stuck detection alerts")
+        stuck_form = QFormLayout()
+
+        self.stuck_spin = QSpinBox()
+        self.stuck_spin.setRange(0, 1440)
+        self.stuck_spin.setSuffix(" min")
+        stuck_form.addRow("Stuck timeout:", self.stuck_spin)
+        stuck_hint = QLabel("0 disables stuck detection.")
+        stuck_hint.setWordWrap(True)
+        stuck_hint.setStyleSheet("color: #555; font-size: 11px;")
+        stuck_form.addRow("", stuck_hint)
+
+        self.cooldown_spin = QSpinBox()
+        self.cooldown_spin.setRange(0, 120)
+        self.cooldown_spin.setSuffix(" min")
+        stuck_form.addRow("Alert cooldown:", self.cooldown_spin)
+        cd_hint = QLabel("Effective gap between alerts is at least 30 seconds (enforced in code).")
+        cd_hint.setWordWrap(True)
+        cd_hint.setStyleSheet("color: #555; font-size: 11px;")
+        stuck_form.addRow("", cd_hint)
+
+        self.max_notif_spin = QSpinBox()
+        self.max_notif_spin.setRange(0, 50)
+        stuck_form.addRow("Max alerts per incident:", self.max_notif_spin)
+        max_hint = QLabel("0 means no stuck alerts for an incident.")
+        max_hint.setWordWrap(True)
+        max_hint.setStyleSheet("color: #555; font-size: 11px;")
+        stuck_form.addRow("", max_hint)
+
+        stuck_group.setLayout(stuck_form)
+        layout.addWidget(stuck_group)
+
+        actions = QHBoxLayout()
+        self.save_btn = QPushButton("Save")
+        self.save_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.save_btn.clicked.connect(self.on_save)
+        self.reload_btn = QPushButton("Reload from disk")
+        self.reload_btn.clicked.connect(self.reload_from_disk)
+        actions.addWidget(self.save_btn)
+        actions.addWidget(self.reload_btn)
+        actions.addStretch(1)
+        layout.addLayout(actions)
+
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        footnote = QLabel(
+            "Farmers already running keep their old stuck-detection settings until you stop and start them again."
+        )
+        footnote.setWordWrap(True)
+        footnote.setStyleSheet("color: #666; font-size: 11px;")
+        layout.addWidget(footnote)
+        layout.addStretch(1)
+
+    @staticmethod
+    def _int_from_data(data: dict, key: str) -> int:
+        raw = data.get(key, APP_CONFIG_DEFAULTS[key])
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return int(APP_CONFIG_DEFAULTS[key])
+
+    def reload_from_disk(self):
+        config.reload()
+        data = load_full_config_dict()
+        topic = data.get("ntfy_private_channel")
+        self.topic_edit.setText("" if topic is None else str(topic))
+        self.stuck_spin.setValue(self._int_from_data(data, "stuck_timeout_minutes"))
+        self.cooldown_spin.setValue(self._int_from_data(data, "notification_cooldown_minutes"))
+        self.max_notif_spin.setValue(self._int_from_data(data, "max_notifications_per_incident"))
+        self.status_label.setText("Reloaded from disk.")
+        self.status_label.setStyleSheet("color: #666;")
+
+    def on_save(self):
+        try:
+            save_config_updates(
+                {
+                    "ntfy_private_channel": self.topic_edit.text().strip(),
+                    "stuck_timeout_minutes": self.stuck_spin.value(),
+                    "notification_cooldown_minutes": self.cooldown_spin.value(),
+                    "max_notifications_per_incident": self.max_notif_spin.value(),
+                }
+            )
+            config.reload()
+            self.status_label.setText("Saved.")
+            self.status_label.setStyleSheet("color: #2e7d32;")
+        except Exception as e:
+            self.status_label.setText(f"Save failed: {e}")
+            self.status_label.setStyleSheet("color: #c62828;")
+
+    def on_test_notification(self):
+        config.reload()
+        ok, msg = test_ntfy_connection()
+        self.status_label.setText(msg)
+        self.status_label.setStyleSheet("color: #2e7d32;" if ok else "color: #c62828;")
+
+
 class FarmerTab(QWidget):
     _COLOR_TAG_RE = re.compile(r"<color=([^>]+)>(.*?)</color>", re.IGNORECASE | re.DOTALL)
 
@@ -1126,6 +1278,8 @@ class MainWindow(QMainWindow):
         # Add About tab as the first tab
         about_tab = AboutTab()
         self.tabs.addTab(about_tab, "About")
+
+        self.tabs.addTab(SettingsTab(), "Settings")
 
         # Add farmer tabs
         for farmer in FARMERS:

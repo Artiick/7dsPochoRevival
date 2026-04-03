@@ -73,9 +73,11 @@ The bot can send push notifications to your phone when it detects a stuck state,
 **Setup:**
 1. Install [ntfy](https://ntfy.sh/) on your phone
 2. Open the app, press '+' and enter a unique, hard-to-guess topic name (e.g. `7ds_farmer_myname_abc123`)
-3. Open `scripts/config/config.yaml` and set `ntfy_private_channel` to that topic
+3. In the AutoFarmers GUI, open the **Settings** tab and set the topic (or edit `scripts/config/config.yaml` and set `ntfy_private_channel`)
 
-**Optional tuning** (all in `config.yaml`):
+Saving from the GUI rewrites `config.yaml` with PyYAML; **inline comments in that file are not preserved** on save.
+
+**Optional tuning** (all in `config.yaml` or the **Settings** tab):
 | Key | Default | Description |
 |-----|---------|-------------|
 | `stuck_timeout_minutes` | 10 | Minutes without state change *and* click activity before alerting |
