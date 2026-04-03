@@ -13,7 +13,7 @@
 # =============================================================================
 
 # AutoFarmers GUI (PyQt5)
-# This script provides a tabbed GUI for all farmer scripts, with argument fields, terminal output, and process control.
+# Dropdown + stacked pages for all farmer scripts, with argument fields, terminal output, and process control.
 
 import contextlib
 import os
@@ -48,8 +48,10 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpinBox,
-    QTabWidget,
+    QSplitter,
+    QStackedWidget,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -108,8 +110,7 @@ Tune your gear so you can guarantee that.<br>
     """,
     "Dogs Floor 4": """
 <p><strong>Requirements:</strong><br>
-• Uses the scripted Dogs Floor 4 team (Escalin, Roxy, Nasiens, Thonar) and phase-specific card logic.<br>
-• Template images under <code>scripts/images/dogs/</code> must match your resolution and UI; replace placeholders as needed.</p>
+• Uses the scripted Dogs Floor 4 team (Escalin, Roxy, Nasiens, Thonar) and phase-specific card logic.</p>
     """,
     "Dogs Farmer": """
 <p><strong>Requirements:</strong><br>
@@ -189,9 +190,9 @@ FARMER_IMAGES = {
     "Bird Floor 4": "bird_floor_4.jpeg",
     "Deer Farmer": "deer_farmer.png",
     "Deer Floor 4": "deer_floor_4.png",
-    "Dogs Floor 4": "dogs_farmer.jpeg",
-    "Tower Trials": "tower_trials_farmer.jpg",
     "Dogs Farmer": "dogs_farmer.jpeg",
+    "Dogs Floor 4": "dogs_floor_4.jpeg",
+    "Tower Trials": "tower_trials_farmer.jpg",
     "Snake Farmer": "snake_farmer.png",
     "Rat Farmer": "rat_farmer.jpg",
     "Final Boss": "final_boss.png",
@@ -270,20 +271,20 @@ FARMERS = [
         ],
     },
     {
-        "name": "Dogs Floor 4",
-        "script": "DogsFloor4Farmer.py",
-        "args": [
-            {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
-            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
-        ],
-    },
-    {
         "name": "Dogs Farmer",
         "script": "DogsFarmer.py",
         "args": [
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
+        ],
+    },
+    {
+        "name": "Dogs Floor 4",
+        "script": "DogsFloor4Farmer.py",
+        "args": [
+            {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
+            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
     },
     {
@@ -786,9 +787,7 @@ class SettingsTab(QWidget):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
-        footnote = QLabel(
-            "Already running a farmer? Stop it and press Start again so it picks up new settings."
-        )
+        footnote = QLabel("Already running a farmer? Stop it and press Start again so it picks up new settings.")
         footnote.setWordWrap(True)
         footnote.setStyleSheet("color: #666; font-size: 11px;")
         layout.addWidget(footnote)
@@ -1328,31 +1327,192 @@ class FarmerTab(QWidget):
         self.load_farmer_image(image)
 
 
+PAGE_ABOUT = "about"
+PAGE_SETTINGS = "settings"
+PAGE_ID_ROLE = Qt.UserRole
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AutoFarmers - 7DS Grand Cross")
-        self.setGeometry(100, 100, 1150, 680)  # Adjusted size for About tab
-        self.tabs = QTabWidget()
+        self.setGeometry(100, 100, 1150, 680)
 
-        # Add About tab as the first tab
-        about_tab = AboutTab()
-        self.tabs.addTab(about_tab, "About")
+        self._farmer_tabs = {}
+        self._farmer_by_name = {f["name"]: f for f in FARMERS}
 
-        settings_tab = SettingsTab()
-        self.tabs.addTab(settings_tab, "Settings")
+        self.about_tab = AboutTab()
+        self.settings_tab = SettingsTab()
 
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.about_tab)
+        self.stack.addWidget(self.settings_tab)
+
+        self.page_combo = QComboBox()
+        self.page_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.page_combo.setMinimumContentsLength(28)
+
+        self.sidebar_search = QLineEdit()
+        self.sidebar_search.setPlaceholderText("Search…")
+        self.sidebar_list = QListWidget()
+
+        self._build_page_selector_items()
+
+        self._splitter = QSplitter(Qt.Horizontal)
+        self._sidebar_last_width = 240
+
+        self.sidebar_toggle = QToolButton()
+        self.sidebar_toggle.setText("Pages")
+        self.sidebar_toggle.setCheckable(True)
+        self.sidebar_toggle.setToolTip(
+            "Show or hide the searchable page list (optional; the Page menu above is enough for daily use)."
+        )
+
+        central = QWidget()
+        root_layout = QVBoxLayout(central)
+        root_layout.setContentsMargins(8, 8, 8, 8)
+
+        header = QHBoxLayout()
+        header.addWidget(QLabel("Page:"))
+        header.addWidget(self.page_combo, 1)
+        header.addWidget(self.sidebar_toggle)
+        root_layout.addLayout(header)
+
+        sidebar = QWidget()
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.addWidget(self.sidebar_search)
+        sidebar_layout.addWidget(self.sidebar_list, 1)
+        self._splitter.addWidget(sidebar)
+        self._splitter.addWidget(self.stack)
+        self._splitter.setStretchFactor(0, 0)
+        self._splitter.setStretchFactor(1, 1)
+        self._splitter.setCollapsible(0, True)
+        self._splitter.setCollapsible(1, False)
+
+        root_layout.addWidget(self._splitter, 1)
+
+        self.sidebar_toggle.toggled.connect(self._on_sidebar_toggle_toggled)
+        self._splitter.splitterMoved.connect(self._on_splitter_moved)
+        self.sidebar_toggle.setChecked(False)
+        self._splitter.setSizes([0, 1000])
+
+        self.page_combo.currentIndexChanged.connect(self._on_combo_index_changed)
+        self.sidebar_list.itemClicked.connect(self._on_sidebar_item_clicked)
+        self.sidebar_search.textChanged.connect(self._on_sidebar_filter_changed)
+
+        self.setCentralWidget(central)
+        self.page_combo.blockSignals(True)
+        self.page_combo.setCurrentIndex(0)
+        self.page_combo.blockSignals(False)
+        self._show_page_for_id(PAGE_ABOUT)
+        self._sync_sidebar_selection(PAGE_ABOUT)
+
+    def _on_sidebar_toggle_toggled(self, visible):
+        sizes = self._splitter.sizes()
+        total = sum(sizes) if sizes else max(self._splitter.width(), 800)
+        if visible:
+            w = max(min(self._sidebar_last_width, total // 2), 180)
+            self._splitter.setSizes([w, max(total - w, 200)])
+        else:
+            if sizes and sizes[0] > 0:
+                self._sidebar_last_width = max(sizes[0], 180)
+            self._splitter.setSizes([0, total])
+
+    def _on_splitter_moved(self, pos, index):
+        del pos, index
+        sizes = self._splitter.sizes()
+        if not sizes:
+            return
+        open_ = sizes[0] > 20
+        if open_:
+            self._sidebar_last_width = max(sizes[0], 180)
+        if self.sidebar_toggle.isChecked() != open_:
+            self.sidebar_toggle.blockSignals(True)
+            self.sidebar_toggle.setChecked(open_)
+            self.sidebar_toggle.blockSignals(False)
+            if not open_:
+                total = sum(sizes)
+                self._splitter.setSizes([0, max(total, 200)])
+
+    def _build_page_selector_items(self):
+        """Fill combo and sidebar list with the same page ids (UserRole / itemData)."""
+        self.page_combo.blockSignals(True)
+        self.page_combo.clear()
+        self.sidebar_list.clear()
+
+        def add_page(label, page_id):
+            self.page_combo.addItem(label, page_id)
+            item = QListWidgetItem(label)
+            item.setData(PAGE_ID_ROLE, page_id)
+            self.sidebar_list.addItem(item)
+
+        add_page("About", PAGE_ABOUT)
+        add_page("Settings", PAGE_SETTINGS)
         for farmer in FARMERS:
-            tab = FarmerTab(
-                farmer,
-                password_supplier=lambda: settings_tab.password_edit.text(),
-            )
-            self.tabs.addTab(tab, farmer["name"])
+            add_page(farmer["name"], farmer["name"])
 
-        # Set About tab as the default
-        self.tabs.setCurrentIndex(0)
+        self.page_combo.blockSignals(False)
 
-        self.setCentralWidget(self.tabs)
+    def _index_for_page_id(self, page_id):
+        for i in range(self.page_combo.count()):
+            if self.page_combo.itemData(i) == page_id:
+                return i
+        return -1
+
+    def _on_combo_index_changed(self, index):
+        if index < 0:
+            return
+        page_id = self.page_combo.itemData(index)
+        self._show_page_for_id(page_id)
+        self._sync_sidebar_selection(page_id)
+
+    def _on_sidebar_item_clicked(self, item):
+        page_id = item.data(PAGE_ID_ROLE)
+        idx = self._index_for_page_id(page_id)
+        if idx >= 0:
+            self.page_combo.setCurrentIndex(idx)
+
+    def _on_sidebar_filter_changed(self, text):
+        needle = text.casefold().strip()
+        for i in range(self.sidebar_list.count()):
+            item = self.sidebar_list.item(i)
+            label = item.text().casefold()
+            item.setHidden(bool(needle) and needle not in label)
+        page_id = self.page_combo.currentData()
+        if page_id is not None:
+            self._sync_sidebar_selection(page_id)
+
+    def _sync_sidebar_selection(self, page_id):
+        for i in range(self.sidebar_list.count()):
+            item = self.sidebar_list.item(i)
+            if item.data(PAGE_ID_ROLE) == page_id:
+                if not item.isHidden():
+                    self.sidebar_list.setCurrentItem(item)
+                    self.sidebar_list.scrollToItem(item)
+                else:
+                    self.sidebar_list.clearSelection()
+                return
+
+    def _show_page_for_id(self, page_id):
+        if page_id == PAGE_ABOUT:
+            self.stack.setCurrentWidget(self.about_tab)
+        elif page_id == PAGE_SETTINGS:
+            self.stack.setCurrentWidget(self.settings_tab)
+        else:
+            self.stack.setCurrentWidget(self._ensure_farmer_tab(page_id))
+
+    def _ensure_farmer_tab(self, name):
+        if name in self._farmer_tabs:
+            return self._farmer_tabs[name]
+        farmer_def = self._farmer_by_name[name]
+        tab = FarmerTab(
+            farmer_def,
+            password_supplier=lambda: self.settings_tab.password_edit.text(),
+        )
+        self.stack.addWidget(tab)
+        self._farmer_tabs[name] = tab
+        return tab
 
 
 def main():
