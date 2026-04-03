@@ -8,7 +8,6 @@ import utilities.vision_images as vio
 from utilities.coordinates import Coordinates
 from utilities.general_farmer_interface import (
     CHECK_IN_HOUR,
-    MINUTES_TO_WAIT_BEFORE_LOGIN,
     IFarmer,
 )
 from utilities.general_farmer_interface import States as GlobalStates
@@ -24,6 +23,7 @@ from utilities.utilities import (
     display_image,
     find,
     find_and_click,
+    get_minutes_to_wait_before_login,
 )
 from utilities.vision import Vision
 
@@ -83,7 +83,7 @@ class IDemonFarmer(IFarmer):
         if password:
             IFarmer.password = password
             print("Stored the account password locally in case we need to log in again.")
-            print(f"We'll wait {MINUTES_TO_WAIT_BEFORE_LOGIN} mins. before attempting a log in.")
+            print(f"We'll wait {get_minutes_to_wait_before_login()} mins. before attempting a log in.")
 
         # Starting state
         self.current_state = starting_state

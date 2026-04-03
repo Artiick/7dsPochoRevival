@@ -13,7 +13,7 @@
 # =============================================================================
 
 # AutoFarmers GUI (PyQt5)
-# This script provides a tabbed GUI for all farmer scripts, with argument fields, terminal output, and process control.
+# Dropdown + stacked pages for all farmer scripts, with argument fields, terminal output, and process control.
 
 import contextlib
 import os
@@ -47,15 +47,25 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QTabWidget,
+    QSpinBox,
+    QSplitter,
+    QStackedWidget,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 # Import the window resize function
 from utilities.capture_window import capture_window, resize_7ds_window
-from utilities.utilities import get_pause_flag_path
+from utilities.utilities import (
+    APP_CONFIG_DEFAULTS,
+    config,
+    get_pause_flag_path,
+    load_full_config_dict,
+    save_config_updates,
+    test_ntfy_connection,
+)
 
 # Free software message to display in GUI
 FREE_SOFTWARE_MESSAGE = """=====================================================================
@@ -89,9 +99,18 @@ REQUIREMENTS = {
     "Deer Floor 4": """
 <p><strong>Requirements:</strong><br>
 • Green Jorm, Thor, Red Freyr, Green Tyr/Green Hel<br>
-• <strong>IMPORTANT</strong>: You must make sure to kill Phase 1 in turn 3. 
-Play with your gears to guarantee this.<br>
+• <strong>IMPORTANT</strong> (whale mode <strong>off</strong>): The bot is built around finishing <strong>Phase 1 in 3</strong> player turns.
+Tune your gear so you can guarantee that.<br>
 • NO SKULD</p>
+    """,
+    "Deer Floor 4 Whale": """
+<p><strong>Whale mode</strong> (aggressive phase-1 opener on the <em>same</em> floor-4 team as normal Deer Floor 4 — not the separate Deer Whale comp):<br>
+• Targets finishing <strong>Phase 1 in 1</strong> player turn; needs the CC/gear to support that opener.<br>
+• With whale mode <strong>off</strong>, expect <strong>Phase 1 in 3</strong> turns instead.</p>
+    """,
+    "Dogs Floor 4": """
+<p><strong>Requirements:</strong><br>
+• Uses the scripted Dogs Floor 4 team (Escalin, Roxy, Nasiens, Thonar) and phase-specific card logic.</p>
     """,
     "Dogs Farmer": """
 <p><strong>Requirements:</strong><br>
@@ -160,6 +179,7 @@ the file <code>run_game.png</code> by it.
 # Maps base farmer names to their whale-mode requirement key and image filename.
 WHALE_MODE_CONFIG = {
     "Deer Farmer": {"requirements_key": "Deer Whale", "image": "deer_whale.jpg"},
+    "Deer Floor 4": {"requirements_key": "Deer Floor 4 Whale", "image": "deer_floor_4.png"},
     "Dogs Farmer": {"requirements_key": "Dogs Whale", "image": "dogs_whale_farmer.jpg"},
     "Snake Farmer": {"requirements_key": "Snake Whale", "image": "snake_whale_farmer.png"},
 }
@@ -170,8 +190,9 @@ FARMER_IMAGES = {
     "Bird Floor 4": "bird_floor_4.jpeg",
     "Deer Farmer": "deer_farmer.png",
     "Deer Floor 4": "deer_floor_4.png",
-    "Tower Trials": "tower_trials_farmer.jpg",
     "Dogs Farmer": "dogs_farmer.jpeg",
+    "Dogs Floor 4": "dogs_floor_4.jpeg",
+    "Tower Trials": "tower_trials_farmer.jpg",
     "Snake Farmer": "snake_farmer.png",
     "Rat Farmer": "rat_farmer.jpg",
     "Final Boss": "final_boss.png",
@@ -190,7 +211,6 @@ FARMERS = [
         "name": "Demon Farmer",
         "script": "DemonFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {
                 "name": "--indura-diff",
                 "label": "Indura Difficulty",
@@ -213,7 +233,6 @@ FARMERS = [
         "name": "Guild Boss Farmer",
         "script": "GuildBossFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
     },
@@ -221,7 +240,6 @@ FARMERS = [
         "name": "Bird Farmer",
         "script": "BirdFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
@@ -230,7 +248,6 @@ FARMERS = [
         "name": "Bird Floor 4",
         "script": "BirdFloor4Farmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
@@ -239,7 +256,6 @@ FARMERS = [
         "name": "Deer Farmer",
         "script": "DeerFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
@@ -249,26 +265,32 @@ FARMERS = [
         "name": "Deer Floor 4",
         "script": "DeerFloor4Farmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
-            {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
-            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
-        ],
-    },
-    {
-        "name": "Dogs Farmer",
-        "script": "DogsFarmer.py",
-        "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
         ],
     },
     {
+        "name": "Dogs Farmer",
+        "script": "DogsFarmer.py",
+        "args": [
+            {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
+            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
+            {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
+        ],
+    },
+    {
+        "name": "Dogs Floor 4",
+        "script": "DogsFloor4Farmer.py",
+        "args": [
+            {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
+            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
+        ],
+    },
+    {
         "name": "Snake Farmer",
         "script": "SnakeFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
@@ -278,7 +300,6 @@ FARMERS = [
         "name": "Rat Farmer",
         "script": "RatFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
@@ -362,6 +383,22 @@ FARMERS = [
         "args": [],
     },
 ]
+
+# Farmer scripts that accept --password / -p (must match argparse in each script).
+PASSWORD_CLI_SCRIPTS = frozenset(
+    {
+        "BirdFarmer.py",
+        "BirdFloor4Farmer.py",
+        "DeerFarmer.py",
+        "DeerFloor4Farmer.py",
+        "DogsFarmer.py",
+        "DogsFloor4Farmer.py",
+        "DemonFarmer.py",
+        "GuildBossFarmer.py",
+        "RatFarmer.py",
+        "SnakeFarmer.py",
+    }
+)
 
 
 class AboutTab(QWidget):
@@ -629,12 +666,194 @@ class AboutTab(QWidget):
         callback(exit_code)
 
 
+class SettingsTab(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+        self.reload_from_disk()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 20, 30, 20)
+        layout.setSpacing(14)
+
+        intro = QLabel(
+            "<strong>Settings</strong> — fill in what you need, then click <strong>Save</strong>. "
+            "<strong>Load saved</strong> puts back whatever was last saved (drops unsaved edits)."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        ntfy_group = QGroupBox("Phone notifications")
+        ntfy_outer = QVBoxLayout()
+        help_ntfy = QLabel(
+            "Install the free ntfy app on your phone and create a topic. "
+            "Type the <em>same</em> topic name here. Leave blank to turn phone alerts off. "
+            "Pick something long and random so only you get the messages."
+        )
+        help_ntfy.setWordWrap(True)
+        help_ntfy.setStyleSheet("color: #555;")
+        ntfy_outer.addWidget(help_ntfy)
+
+        topic_row = QHBoxLayout()
+        topic_row.addWidget(QLabel("Topic:"))
+        self.topic_edit = QLineEdit()
+        self.topic_edit.setPlaceholderText("e.g. 7ds_farmer_myname_abc123")
+        topic_row.addWidget(self.topic_edit)
+        ntfy_outer.addLayout(topic_row)
+
+        ntfy_btn_row = QHBoxLayout()
+        ntfy_open_btn = QPushButton("Open ntfy (get the app)")
+        ntfy_open_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://ntfy.sh/")))
+        self.test_notif_btn = QPushButton("Send test notification")
+        self.test_notif_btn.clicked.connect(self.on_test_notification)
+        ntfy_btn_row.addWidget(ntfy_open_btn)
+        ntfy_btn_row.addWidget(self.test_notif_btn)
+        ntfy_btn_row.addStretch(1)
+        ntfy_outer.addLayout(ntfy_btn_row)
+        ntfy_group.setLayout(ntfy_outer)
+        layout.addWidget(ntfy_group)
+
+        stuck_group = QGroupBox("If the bot seems stuck")
+        stuck_form = QFormLayout()
+
+        self.stuck_spin = QSpinBox()
+        self.stuck_spin.setRange(0, 1440)
+        self.stuck_spin.setSuffix(" min")
+        stuck_form.addRow("How long before warning you:", self.stuck_spin)
+        stuck_hint = QLabel("0 = off (no stuck warnings).")
+        stuck_hint.setWordWrap(True)
+        stuck_hint.setStyleSheet("color: #555; font-size: 11px;")
+        stuck_form.addRow("", stuck_hint)
+
+        self.cooldown_spin = QSpinBox()
+        self.cooldown_spin.setRange(0, 120)
+        self.cooldown_spin.setSuffix(" min")
+        stuck_form.addRow("Space between repeat warnings:", self.cooldown_spin)
+        cd_hint = QLabel("Won't ping faster than about every 30 seconds.")
+        cd_hint.setWordWrap(True)
+        cd_hint.setStyleSheet("color: #555; font-size: 11px;")
+        stuck_form.addRow("", cd_hint)
+
+        self.max_notif_spin = QSpinBox()
+        self.max_notif_spin.setRange(0, 50)
+        stuck_form.addRow("Max warnings per stuck episode:", self.max_notif_spin)
+        max_hint = QLabel("0 = no warnings for that episode.")
+        max_hint.setWordWrap(True)
+        max_hint.setStyleSheet("color: #555; font-size: 11px;")
+        stuck_form.addRow("", max_hint)
+
+        stuck_group.setLayout(stuck_form)
+        layout.addWidget(stuck_group)
+
+        pwd_group = QGroupBox("Game login")
+        pwd_outer = QVBoxLayout()
+        pwd_help = QLabel(
+            "If the game logs you out, the bot can try to sign back in using this password. "
+            "Leave the password blank if you don't want that. "
+            "After a logout, the bot waits the number of minutes below before it tries to log in."
+        )
+        pwd_help.setWordWrap(True)
+        pwd_help.setStyleSheet("color: #555;")
+        pwd_outer.addWidget(pwd_help)
+        pwd_row = QHBoxLayout()
+        pwd_row.addWidget(QLabel("Password:"))
+        self.password_edit = QLineEdit()
+        self.password_edit.setEchoMode(QLineEdit.Password)
+        self.password_edit.setPlaceholderText("Same as in the game (optional)")
+        pwd_row.addWidget(self.password_edit)
+        pwd_outer.addLayout(pwd_row)
+        login_wait_form = QFormLayout()
+        self.login_wait_spin = QSpinBox()
+        self.login_wait_spin.setRange(1, 1440)
+        self.login_wait_spin.setSuffix(" min")
+        login_wait_form.addRow("Minutes to wait after logout before login:", self.login_wait_spin)
+        pwd_outer.addLayout(login_wait_form)
+        pwd_group.setLayout(pwd_outer)
+        layout.addWidget(pwd_group)
+
+        actions = QHBoxLayout()
+        self.save_btn = QPushButton("Save")
+        self.save_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.save_btn.clicked.connect(self.on_save)
+        self.reload_btn = QPushButton("Load saved")
+        self.reload_btn.clicked.connect(self.reload_from_disk)
+        actions.addWidget(self.save_btn)
+        actions.addWidget(self.reload_btn)
+        actions.addStretch(1)
+        layout.addLayout(actions)
+
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        footnote = QLabel("Already running a farmer? Stop it and press Start again so it picks up new settings.")
+        footnote.setWordWrap(True)
+        footnote.setStyleSheet("color: #666; font-size: 11px;")
+        layout.addWidget(footnote)
+        layout.addStretch(1)
+
+    @staticmethod
+    def _int_from_data(data: dict, key: str) -> int:
+        raw = data.get(key, APP_CONFIG_DEFAULTS[key])
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return int(APP_CONFIG_DEFAULTS[key])
+
+    def reload_from_disk(self):
+        config.reload()
+        data = load_full_config_dict()
+        topic = data.get("ntfy_private_channel")
+        self.topic_edit.setText("" if topic is None else str(topic))
+        self.stuck_spin.setValue(self._int_from_data(data, "stuck_timeout_minutes"))
+        self.cooldown_spin.setValue(self._int_from_data(data, "notification_cooldown_minutes"))
+        self.max_notif_spin.setValue(self._int_from_data(data, "max_notifications_per_incident"))
+        pw = data.get("game_password", APP_CONFIG_DEFAULTS["game_password"])
+        if pw is None or str(pw).strip() == "":
+            legacy = data.get("default_game_password")
+            if legacy is not None and str(legacy).strip() != "":
+                pw = legacy
+        self.password_edit.setText("" if pw is None else str(pw))
+        self.login_wait_spin.setValue(self._int_from_data(data, "minutes_to_wait_before_login"))
+        self.status_label.setText("Loaded saved settings.")
+        self.status_label.setStyleSheet("color: #666;")
+
+    def on_save(self):
+        try:
+            stripped_pwd = self.password_edit.text().strip()
+            self.password_edit.setText(stripped_pwd)
+            save_config_updates(
+                {
+                    "ntfy_private_channel": self.topic_edit.text().strip(),
+                    "stuck_timeout_minutes": self.stuck_spin.value(),
+                    "notification_cooldown_minutes": self.cooldown_spin.value(),
+                    "max_notifications_per_incident": self.max_notif_spin.value(),
+                    "game_password": stripped_pwd,
+                    "minutes_to_wait_before_login": self.login_wait_spin.value(),
+                }
+            )
+            config.reload()
+            self.status_label.setText("Saved.")
+            self.status_label.setStyleSheet("color: #2e7d32;")
+        except Exception as e:
+            self.status_label.setText(f"Save failed: {e}")
+            self.status_label.setStyleSheet("color: #c62828;")
+
+    def on_test_notification(self):
+        config.reload()
+        ok, msg = test_ntfy_connection()
+        self.status_label.setText(msg)
+        self.status_label.setStyleSheet("color: #2e7d32;" if ok else "color: #c62828;")
+
+
 class FarmerTab(QWidget):
     _COLOR_TAG_RE = re.compile(r"<color=([^>]+)>(.*?)</color>", re.IGNORECASE | re.DOTALL)
 
-    def __init__(self, farmer, parent=None):
+    def __init__(self, farmer, password_supplier=None, parent=None):
         super().__init__(parent)
         self.farmer = farmer
+        self._password_supplier = password_supplier
         self.process = None
         self.output_lines = []
         self.paused = False
@@ -686,8 +905,6 @@ class FarmerTab(QWidget):
                 else:
                     widget = QLineEdit()
                     widget.setText(arg["default"])
-                    if arg["label"].lower() == "password":
-                        widget.setEchoMode(QLineEdit.Password)
                 self.arg_widgets[arg["name"]] = widget
                 args_layout.addRow(arg["label"] + ":", widget)
 
@@ -806,6 +1023,22 @@ class FarmerTab(QWidget):
                     args.extend([arg["name"]] + selected)
             elif value := widget.text():
                 args.extend([arg["name"], value])
+        if self.farmer["script"] in PASSWORD_CLI_SCRIPTS:
+            pw = ""
+            if self._password_supplier:
+                try:
+                    pw = self._password_supplier() or ""
+                except Exception:
+                    pw = ""
+            pw = (pw or "").strip()
+            if not pw:
+                data = load_full_config_dict()
+                raw = data.get("game_password", APP_CONFIG_DEFAULTS["game_password"])
+                if raw is None or str(raw).strip() == "":
+                    raw = data.get("default_game_password")
+                pw = ("" if raw is None else str(raw)).strip()
+            if pw:
+                args.extend(["--password", pw])
         return args
 
     def start_farmer(self):
@@ -1094,26 +1327,192 @@ class FarmerTab(QWidget):
         self.load_farmer_image(image)
 
 
+PAGE_ABOUT = "about"
+PAGE_SETTINGS = "settings"
+PAGE_ID_ROLE = Qt.UserRole
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AutoFarmers - 7DS Grand Cross")
-        self.setGeometry(100, 100, 1150, 680)  # Adjusted size for About tab
-        self.tabs = QTabWidget()
+        self.setGeometry(100, 100, 1150, 680)
 
-        # Add About tab as the first tab
-        about_tab = AboutTab()
-        self.tabs.addTab(about_tab, "About")
+        self._farmer_tabs = {}
+        self._farmer_by_name = {f["name"]: f for f in FARMERS}
 
-        # Add farmer tabs
+        self.about_tab = AboutTab()
+        self.settings_tab = SettingsTab()
+
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.about_tab)
+        self.stack.addWidget(self.settings_tab)
+
+        self.page_combo = QComboBox()
+        self.page_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.page_combo.setMinimumContentsLength(28)
+
+        self.sidebar_search = QLineEdit()
+        self.sidebar_search.setPlaceholderText("Search…")
+        self.sidebar_list = QListWidget()
+
+        self._build_page_selector_items()
+
+        self._splitter = QSplitter(Qt.Horizontal)
+        self._sidebar_last_width = 240
+
+        self.sidebar_toggle = QToolButton()
+        self.sidebar_toggle.setText("Pages")
+        self.sidebar_toggle.setCheckable(True)
+        self.sidebar_toggle.setToolTip(
+            "Show or hide the searchable page list (optional; the Page menu above is enough for daily use)."
+        )
+
+        central = QWidget()
+        root_layout = QVBoxLayout(central)
+        root_layout.setContentsMargins(8, 8, 8, 8)
+
+        header = QHBoxLayout()
+        header.addWidget(QLabel("Page:"))
+        header.addWidget(self.page_combo, 1)
+        header.addWidget(self.sidebar_toggle)
+        root_layout.addLayout(header)
+
+        sidebar = QWidget()
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.addWidget(self.sidebar_search)
+        sidebar_layout.addWidget(self.sidebar_list, 1)
+        self._splitter.addWidget(sidebar)
+        self._splitter.addWidget(self.stack)
+        self._splitter.setStretchFactor(0, 0)
+        self._splitter.setStretchFactor(1, 1)
+        self._splitter.setCollapsible(0, True)
+        self._splitter.setCollapsible(1, False)
+
+        root_layout.addWidget(self._splitter, 1)
+
+        self.sidebar_toggle.toggled.connect(self._on_sidebar_toggle_toggled)
+        self._splitter.splitterMoved.connect(self._on_splitter_moved)
+        self.sidebar_toggle.setChecked(False)
+        self._splitter.setSizes([0, 1000])
+
+        self.page_combo.currentIndexChanged.connect(self._on_combo_index_changed)
+        self.sidebar_list.itemClicked.connect(self._on_sidebar_item_clicked)
+        self.sidebar_search.textChanged.connect(self._on_sidebar_filter_changed)
+
+        self.setCentralWidget(central)
+        self.page_combo.blockSignals(True)
+        self.page_combo.setCurrentIndex(0)
+        self.page_combo.blockSignals(False)
+        self._show_page_for_id(PAGE_ABOUT)
+        self._sync_sidebar_selection(PAGE_ABOUT)
+
+    def _on_sidebar_toggle_toggled(self, visible):
+        sizes = self._splitter.sizes()
+        total = sum(sizes) if sizes else max(self._splitter.width(), 800)
+        if visible:
+            w = max(min(self._sidebar_last_width, total // 2), 180)
+            self._splitter.setSizes([w, max(total - w, 200)])
+        else:
+            if sizes and sizes[0] > 0:
+                self._sidebar_last_width = max(sizes[0], 180)
+            self._splitter.setSizes([0, total])
+
+    def _on_splitter_moved(self, pos, index):
+        del pos, index
+        sizes = self._splitter.sizes()
+        if not sizes:
+            return
+        open_ = sizes[0] > 20
+        if open_:
+            self._sidebar_last_width = max(sizes[0], 180)
+        if self.sidebar_toggle.isChecked() != open_:
+            self.sidebar_toggle.blockSignals(True)
+            self.sidebar_toggle.setChecked(open_)
+            self.sidebar_toggle.blockSignals(False)
+            if not open_:
+                total = sum(sizes)
+                self._splitter.setSizes([0, max(total, 200)])
+
+    def _build_page_selector_items(self):
+        """Fill combo and sidebar list with the same page ids (UserRole / itemData)."""
+        self.page_combo.blockSignals(True)
+        self.page_combo.clear()
+        self.sidebar_list.clear()
+
+        def add_page(label, page_id):
+            self.page_combo.addItem(label, page_id)
+            item = QListWidgetItem(label)
+            item.setData(PAGE_ID_ROLE, page_id)
+            self.sidebar_list.addItem(item)
+
+        add_page("About", PAGE_ABOUT)
+        add_page("Settings", PAGE_SETTINGS)
         for farmer in FARMERS:
-            tab = FarmerTab(farmer)
-            self.tabs.addTab(tab, farmer["name"])
+            add_page(farmer["name"], farmer["name"])
 
-        # Set About tab as the default
-        self.tabs.setCurrentIndex(0)
+        self.page_combo.blockSignals(False)
 
-        self.setCentralWidget(self.tabs)
+    def _index_for_page_id(self, page_id):
+        for i in range(self.page_combo.count()):
+            if self.page_combo.itemData(i) == page_id:
+                return i
+        return -1
+
+    def _on_combo_index_changed(self, index):
+        if index < 0:
+            return
+        page_id = self.page_combo.itemData(index)
+        self._show_page_for_id(page_id)
+        self._sync_sidebar_selection(page_id)
+
+    def _on_sidebar_item_clicked(self, item):
+        page_id = item.data(PAGE_ID_ROLE)
+        idx = self._index_for_page_id(page_id)
+        if idx >= 0:
+            self.page_combo.setCurrentIndex(idx)
+
+    def _on_sidebar_filter_changed(self, text):
+        needle = text.casefold().strip()
+        for i in range(self.sidebar_list.count()):
+            item = self.sidebar_list.item(i)
+            label = item.text().casefold()
+            item.setHidden(bool(needle) and needle not in label)
+        page_id = self.page_combo.currentData()
+        if page_id is not None:
+            self._sync_sidebar_selection(page_id)
+
+    def _sync_sidebar_selection(self, page_id):
+        for i in range(self.sidebar_list.count()):
+            item = self.sidebar_list.item(i)
+            if item.data(PAGE_ID_ROLE) == page_id:
+                if not item.isHidden():
+                    self.sidebar_list.setCurrentItem(item)
+                    self.sidebar_list.scrollToItem(item)
+                else:
+                    self.sidebar_list.clearSelection()
+                return
+
+    def _show_page_for_id(self, page_id):
+        if page_id == PAGE_ABOUT:
+            self.stack.setCurrentWidget(self.about_tab)
+        elif page_id == PAGE_SETTINGS:
+            self.stack.setCurrentWidget(self.settings_tab)
+        else:
+            self.stack.setCurrentWidget(self._ensure_farmer_tab(page_id))
+
+    def _ensure_farmer_tab(self, name):
+        if name in self._farmer_tabs:
+            return self._farmer_tabs[name]
+        farmer_def = self._farmer_by_name[name]
+        tab = FarmerTab(
+            farmer_def,
+            password_supplier=lambda: self.settings_tab.password_edit.text(),
+        )
+        self.stack.addWidget(tab)
+        self._farmer_tabs[name] = tab
+        return tab
 
 
 def main():

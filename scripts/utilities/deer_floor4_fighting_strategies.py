@@ -1,6 +1,6 @@
 import numpy as np
 import utilities.vision_images as vio
-from utilities.card_data import Card, CardRanks, CardTypes
+from utilities.card_data import Card, CardTypes
 from utilities.deer_utilities import (
     count_cards,
     has_ult,
@@ -20,7 +20,7 @@ from utilities.fighting_strategies import IBattleStrategy, SmarterBattleStrategy
 from utilities.logging_utils import LoggerWrapper
 from utilities.utilities import capture_window, find
 
-logger = LoggerWrapper("BirdFloor4FightingStrategies", log_file="deer_floor4_AI.log")
+logger = LoggerWrapper("DeerFloor4FightingStrategies", log_file="deer_floor4_AI.log")
 
 
 class DeerFloor4BattleStrategy(IBattleStrategy):
@@ -41,11 +41,31 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
     # What color cards we're running on phase 3
     _color_cards_picked_p3 = None
 
+    # Whale phase-2: prospective double-red sequence (one-shot via flag)
+    _phase2_double_red_used = False
+
     def _initialize_static_variables(self):
         DeerFloor4BattleStrategy.turn = 0
         DeerFloor4BattleStrategy._phase_initialized = set()
         DeerFloor4BattleStrategy._color_cards_used_p2t0 = None
         DeerFloor4BattleStrategy._color_cards_picked_p3 = None
+        DeerFloor4BattleStrategy._phase2_double_red_used = False
+
+    @staticmethod
+    def _pick_or_fallback(
+        hand_of_cards: list[Card],
+        picked_cards: list[Card],
+        indices: list[int],
+        *,
+        prefer: str = "last",
+        warn_reason: str | None = None,
+    ) -> int:
+        """Return an index from ``indices`` or delegate to SmarterBattleStrategy if empty."""
+        if not indices:
+            if warn_reason:
+                print(f"[WARN] {warn_reason}; falling back to SmarterBattleStrategy.")
+            return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
+        return indices[-1] if prefer == "last" else indices[0]
 
     def get_next_card_index(
         self, hand_of_cards: list[Card], picked_cards: list[Card], phase: int, card_turn=0, **kwargs
@@ -60,9 +80,13 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
         DeerFloor4BattleStrategy._last_phase_seen = phase
 
         if phase == 1:
-            card_index = self.get_next_card_index_phase1(hand_of_cards, picked_cards, card_turn=card_turn)
+            card_index = self.get_next_card_index_phase1(
+                hand_of_cards, picked_cards, card_turn=card_turn, whale=bool(kwargs.get("whale", False))
+            )
         elif phase == 2:
-            card_index = self.get_next_card_index_phase2(hand_of_cards, picked_cards, card_turn=card_turn)
+            card_index = self.get_next_card_index_phase2(
+                hand_of_cards, picked_cards, card_turn=card_turn, whale=bool(kwargs.get("whale", False))
+            )
         elif phase == 3:
             card_index = self.get_next_card_index_phase3(hand_of_cards, picked_cards, card_turn=card_turn)
         elif phase == 4:
@@ -81,19 +105,119 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
             DeerFloor4BattleStrategy.turn = 0
             DeerFloor4BattleStrategy._phase_initialized.add(phase_id)
 
-    def get_next_card_index_phase1(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int) -> int:
+    def _phase1_round0_standard(
+        self,
+        hand_of_cards: list[Card],
+        picked_cards: list[Card],
+        card_turn: int,
+        thor_cards: list[int],
+        tyr_hel_cards: list[int],
+        jorm_cards: list[int],
+        freyr_cards: list[int],
+        red_card_ids: list[int],
+    ) -> int:
+        """Legacy phase-1 opener (default): Tyr/Hel low, Jorm buff removal, Thor crit, Tyr/Hel high."""
+        if card_turn == 0:
+            return self._pick_or_fallback(
+                hand_of_cards,
+                picked_cards,
+                tyr_hel_cards,
+                prefer="first",
+                warn_reason="No Tyr/Hel cards detected in hand (resize window or check vision)",
+            )
+        if card_turn == 1:
+            if jorm_cards:
+                return jorm_cards[-1]
+            if freyr_cards:
+                return freyr_cards[-1]
+            return self._pick_or_fallback(
+                hand_of_cards,
+                picked_cards,
+                red_card_ids,
+                prefer="last",
+                warn_reason="No Jorm/Freyr/red card for phase 1 slot 1 (standard)",
+            )
+        if card_turn == 2:
+            return self._pick_or_fallback(
+                hand_of_cards,
+                picked_cards,
+                thor_cards,
+                prefer="first",
+                warn_reason="No Thor card for phase 1 slot 2",
+            )
+        return self._pick_or_fallback(
+            hand_of_cards,
+            picked_cards,
+            tyr_hel_cards,
+            prefer="last",
+            warn_reason="No Tyr/Hel for phase 1 slot 3 (standard)",
+        )
+
+    def _phase1_round0_whale(
+        self,
+        hand_of_cards: list[Card],
+        picked_cards: list[Card],
+        card_turn: int,
+        thor_cards: list[int],
+        tyr_hel_cards: list[int],
+        jorm_cards: list[int],
+        freyr_cards: list[int],
+        red_card_ids: list[int],
+    ) -> int:
+        """Aggressive opener (whale / high gear): Tyr/Hel high, Freyr, Thor low, Thor high."""
+        if card_turn == 0:
+            return self._pick_or_fallback(
+                hand_of_cards,
+                picked_cards,
+                tyr_hel_cards,
+                prefer="last",
+                warn_reason="No Tyr/Hel cards detected in hand (resize window or check vision)",
+            )
+        if card_turn == 1:
+            if freyr_cards:
+                return freyr_cards[-1]
+            if jorm_cards:
+                return jorm_cards[-1]
+            return self._pick_or_fallback(
+                hand_of_cards,
+                picked_cards,
+                red_card_ids,
+                prefer="last",
+                warn_reason="No Freyr/Jorm/red card for phase 1 slot 1 (whale)",
+            )
+        if card_turn == 2:
+            return self._pick_or_fallback(
+                hand_of_cards,
+                picked_cards,
+                thor_cards,
+                prefer="first",
+                warn_reason="No Thor card for phase 1 slot 2",
+            )
+        if thor_cards:
+            return thor_cards[-1]
+        return self._pick_or_fallback(
+            hand_of_cards,
+            picked_cards,
+            tyr_hel_cards,
+            prefer="last",
+            warn_reason="No Thor for phase 1 slot 3; trying Tyr/Hel (whale)",
+        )
+
+    def get_next_card_index_phase1(
+        self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int, *, whale: bool = False
+    ) -> int:
         # sourcery skip: merge-duplicate-blocks
-        """The strategy is the following:
+        """Phase 1 strategy.
 
-        Turn 1 - Freyr Cleave > tyr Att > Jorm buff removal > Thor Crit chance
+        First player round: the game gives 2 cards per unit (8 cards); vision can still fail to classify them.
 
-        (This where the Strat deviates depending on the rng you get)
+        Round 0 (first four picks): controlled by ``whale``. This is **not** the separate Deer Whale *team*
+        used by ``DeerFarmer --whale``; it only toggles the floor-4 phase-1 opener.
 
-        Turn 2 (With an extra thor card) - Move thor card 2 times and use her lvl 2 (she must have 4 ult gauge )tyr card once.
+        - **Standard** (``whale=False``): lowest Tyr/Hel, Jorm (else Freyr/red), lowest Thor, highest Tyr/Hel.
+        - **Whale** (``whale=True``): highest Tyr/Hel, Freyr (else Jorm/red), lowest Thor, highest Thor (else Tyr/Hel).
 
-        Turn 2 (without a extra thor card) - Attack with thor and move tyr card 3 times
-
-        Turn 3 - (With extra thor card) - move thor once and use her card to kill, then move tyr or freyr card 2 times (u want tyr and freyr to be close to their ults. ideally u want tyr to have 3 ult points)
+        Later phase-1 rounds: same for both; Thor moves / plays and Tyr/Hel/Jorm moves as before.
         """
 
         self._maybe_reset("phase_1")  # Not needed, but whatever
@@ -102,7 +226,6 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
             print(f"TURN {DeerFloor4BattleStrategy.turn}:")
 
         card_ranks = [card.card_rank.value for card in hand_of_cards]
-        # All unit cards sorted
         thor_cards = sorted(
             [i for i, card in enumerate(hand_of_cards) if is_Thor_card(card)], key=lambda idx: card_ranks[idx]
         )
@@ -113,20 +236,35 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
         jorm_cards = sorted(
             [i for i, card in enumerate(hand_of_cards) if is_Jorm_card(card)], key=lambda idx: card_ranks[idx]
         )
+        freyr_cards = sorted(
+            [i for i, card in enumerate(hand_of_cards) if is_Freyr_card(card)], key=lambda idx: card_ranks[idx]
+        )
+        red_card_ids = sorted(
+            [i for i, card in enumerate(hand_of_cards) if is_red_card(card)], key=lambda idx: card_ranks[idx]
+        )
 
         if DeerFloor4BattleStrategy.turn == 0:
-            if card_turn == 0:
-                if not len(tyr_hel_cards):
-                    raise ValueError(
-                        "Something's very wrong with your bot, no Hel/Tyr cards detected. Resize the 7DS window and try again."
-                    )
-                return tyr_hel_cards[0]  # tyr first card, or hel debuf
-            elif card_turn == 1:
-                return jorm_cards[-1]  # Jorm buff removal, save heal for p2
-            elif card_turn == 2:
-                return thor_cards[0]  # Thor crit chance
-
-            return tyr_hel_cards[-1]  # tyr attack
+            if whale:
+                return self._phase1_round0_whale(
+                    hand_of_cards,
+                    picked_cards,
+                    card_turn,
+                    thor_cards,
+                    tyr_hel_cards,
+                    jorm_cards,
+                    freyr_cards,
+                    red_card_ids,
+                )
+            return self._phase1_round0_standard(
+                hand_of_cards,
+                picked_cards,
+                card_turn,
+                thor_cards,
+                tyr_hel_cards,
+                jorm_cards,
+                freyr_cards,
+                red_card_ids,
+            )
 
         elif DeerFloor4BattleStrategy.turn == 1 and len(thor_cards):
             if card_turn <= 2:
@@ -135,23 +273,24 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
 
         elif DeerFloor4BattleStrategy.turn == 2:
             cards_to_move = tyr_hel_cards if len(tyr_hel_cards) else jorm_cards
+            if not cards_to_move:
+                print("[WARN] No Tyr/Hel/Jorm card to move in phase 1 turn 2.")
+                return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
             if card_turn < 2:
                 return [cards_to_move[0], cards_to_move[0] + 1]
             if card_turn == 2:
                 if len(thor_cards) > 1:
-                    # Play a Thor card to be safe
                     return thor_cards[0]
-                else:
-                    # Just move a card...
-                    return [cards_to_move[0], cards_to_move[0] + 1]
-            # In the last turn, use Thor's card
+                return [cards_to_move[0], cards_to_move[0] + 1]
             if len(thor_cards):
-                return thor_cards[0]  # Better to NOT play the ult, in case we can do the double hit
+                return thor_cards[0]
 
         print("[WARN] We couldn't finish in 3 turns...")
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
-    def get_next_card_index_phase2(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int) -> int:
+    def get_next_card_index_phase2(
+        self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int, *, whale: bool = False
+    ) -> int:
         # sourcery skip: extract-method
         """Extract the indices based on the list of cards and the current phase"""
 
@@ -183,20 +322,21 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
         blue_card_ids = sorted(
             [i for i, card in enumerate(hand_of_cards) if is_blue_card(card)], key=lambda idx: card_ranks[idx]
         )
-        # Reorder heal cards
         green_card_ids = reorder_jorms_heal(hand_of_cards, green_card_ids)
 
-        # Turn 1, use 2 Freyr cards
         num_red_cards = count_cards(hand_of_cards + picked_cards, is_red_card)
-        if DeerFloor4BattleStrategy.turn == 0 and num_red_cards > 1:
+        t = DeerFloor4BattleStrategy.turn
+        double_red = num_red_cards > 1 and len(red_card_ids) and (
+            (not whale and t == 0)
+            or (whale and not DeerFloor4BattleStrategy._phase2_double_red_used and t in (0, 1, 2))
+        )
+        if double_red:
             if card_turn == 0:
-                # First play one card to avoid accidentally merging
                 return red_card_ids[0]
-
             if card_turn <= 2:
-                # Move Freyr cards
                 return [red_card_ids[0], red_card_ids[0] + 1]
-
+            if whale:
+                DeerFloor4BattleStrategy._phase2_double_red_used = True
             return red_card_ids[0]
 
         card_groups = {"green": green_card_ids, "red": red_card_ids, "blue": blue_card_ids}
@@ -266,9 +406,14 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
         # Group them by their name
         card_groups = {"green": green_card_ids, "red": red_card_ids, "blue": blue_card_ids}
 
-        # On turn 0, use green cards to try to heal with Jorm
+        # Phase-3 turn 0: enough greens (hand + picked) → prefer green; len() not `if green_card_ids` (ndarray-safe).
         num_green_cards = count_cards(hand_of_cards + picked_cards, is_green_card)
-        if DeerFloor4BattleStrategy.turn == 0 and card_turn <= 2 and num_green_cards >= 3:
+        if (
+            DeerFloor4BattleStrategy.turn == 0
+            and card_turn <= 2
+            and num_green_cards >= 3
+            and len(green_card_ids)
+        ):
             DeerFloor4BattleStrategy._color_cards_picked_p3 = "green"
             return green_card_ids[-1]
 
@@ -284,14 +429,15 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
             return picked_card_ids[-1]
 
         if card_turn > 2:
-            # Let's pick a card from the color that has the most
             picked_color_ids = max(green_card_ids, red_card_ids, blue_card_ids, key=len)
-            idx = -1
             if not len(picked_color_ids):
-                return idx
+                return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
+            idx = -1
             if find(vio.freyr_ult, hand_of_cards[picked_color_ids[idx]].card_image):
                 print(f"We found Freyr's ult on the picked id {picked_color_ids[idx]}! Saving it for phase 4")
                 idx -= 1
+            if idx < -len(picked_color_ids):
+                return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
             return picked_color_ids[idx]
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
@@ -339,7 +485,8 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
                 # Only disable red up to turn 2
                 red_card_ids = red_card_ids[::-1]
 
-            if card_turn == 3 and not find(vio.hel_ult, picked_cards[0].card_image):
+            first_picked = picked_cards[0] if picked_cards else Card()
+            if card_turn == 3 and not find(vio.hel_ult, first_picked.card_image):
                 # Move a card of someone that doesn't have an ult AND if we haven't played a Hel's ult at the beginning
                 return self._move_card_for_ult(
                     hand_of_cards + picked_cards,

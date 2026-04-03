@@ -13,7 +13,6 @@ from utilities.coordinates import Coordinates
 from utilities.fighting_strategies import IBattleStrategy
 from utilities.general_farmer_interface import (
     CHECK_IN_HOUR,
-    MINUTES_TO_WAIT_BEFORE_LOGIN,
     PACIFIC_TIMEZONE,
     IFarmer,
 )
@@ -25,6 +24,7 @@ from utilities.utilities import (
     drag_im,
     find,
     find_and_click,
+    get_minutes_to_wait_before_login,
 )
 
 logger = LoggerWrapper("Floor4Logger", log_file="floor_4.log")
@@ -43,6 +43,7 @@ class IFloor4Farmer(IFarmer):
     # Need to be static across instances
     success_count = 0
     total_count = 0
+    reset_count = 0
     dict_of_defeats = defaultdict(int)
 
     def __init__(
@@ -61,7 +62,7 @@ class IFloor4Farmer(IFarmer):
         if password:
             IFarmer.password = password
             print("Stored the account password locally in case we need to log in again.")
-            print(f"We'll wait {MINUTES_TO_WAIT_BEFORE_LOGIN} mins. before attempting a log in.")
+            print(f"We'll wait {get_minutes_to_wait_before_login()} mins. before attempting a log in.")
 
         # In case we want to do dailies at the specified hour
         IFarmer.do_dailies = do_dailies
@@ -93,6 +94,7 @@ class IFloor4Farmer(IFarmer):
             (IFloor4Farmer.success_count / IFloor4Farmer.total_count) * 100 if IFloor4Farmer.total_count > 0 else 0
         )
         print(f"We beat Floor4 {IFloor4Farmer.success_count}/{IFloor4Farmer.total_count} times ({percent:.2f}%).")
+        print(f"Total reset count: {IFloor4Farmer.reset_count}")
         # Log the defeats
         if len(IFloor4Farmer.dict_of_defeats):
             defeat_msg = self._print_defeats()
@@ -201,9 +203,22 @@ class IFloor4Farmer(IFarmer):
             self.current_state = States.PROCEED_TO_FLOOR
 
     def fight_complete_callback(self, victory=True, **kwargs):
-        """Called when the fight logic completes."""
+        """Called when the fight logic completes.
+
+        If ``stop_farmer`` is True, the farmer exits immediately without taking the lock,
+        incrementing ``total_count``, or updating success/defeat tallies — intentional for
+        clean shutdown (e.g. Dogs F4 stopping after phase 2).
+        """
+        if kwargs.get("stop_farmer", False):
+            reason = kwargs.get("reason", "Stopping the Floor 4 farmer.")
+            print(reason)
+            self.current_state = States.EXIT_FARMER
+            return
+
         with IFarmer._lock:
             IFloor4Farmer.total_count += 1
+            if kwargs.get("reset", False):
+                IFloor4Farmer.reset_count += 1
             if victory:
                 # Transition to another state or perform clean-up actions
                 IFloor4Farmer.success_count += 1

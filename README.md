@@ -67,20 +67,28 @@ Now, simply via the `Update` button in the "About" tab of the GUI!
 
 You can PAUSE/RESUME the bot at any time with the corresponding button.
 
+### Game password and re-login (GUI)
+
+The **Settings** tab stores **`game_password`** in `scripts/config/config.yaml` (plaintext). It is used when the game shows the login screen after a disconnect or logout so the bot can sign back in. Password-capable farmers receive `--password` from Settings (in-memory field first, then saved `game_password` in the file). **`minutes_to_wait_before_login`** configures how long to wait after logout before attempting login again (same setting the farmers read at process start). There is **no per-farmer password field** in the GUI. **Accounts Farmer** does not use `game_password` (it uses `config/accounts.yaml`). If `config.yaml` contains secrets, avoid committing it or use a private clone.
+
 ### Push Notifications
 The bot can send push notifications to your phone when it detects a stuck state, including a screenshot for quick diagnosis. Once the bot recovers, you get a recovery alert.
 
 **Setup:**
 1. Install [ntfy](https://ntfy.sh/) on your phone
 2. Open the app, press '+' and enter a unique, hard-to-guess topic name (e.g. `7ds_farmer_myname_abc123`)
-3. Open `scripts/config/config.yaml` and set `ntfy_private_channel` to that topic
+3. In the AutoFarmers GUI, open the **Settings** tab and set the topic (or edit `scripts/config/config.yaml` and set `ntfy_private_channel`)
 
-**Optional tuning** (all in `config.yaml`):
+Saving from the GUI rewrites `config.yaml` with PyYAML; **inline comments in that file are not preserved** on save.
+
+**Optional tuning** (all in `config.yaml` or the **Settings** tab):
 | Key | Default | Description |
 |-----|---------|-------------|
 | `stuck_timeout_minutes` | 10 | Minutes without state change *and* click activity before alerting |
 | `notification_cooldown_minutes` | 5 | Minimum gap between repeated stuck alerts |
 | `max_notifications_per_incident` | 5 | Hard cap on alerts per stuck incident |
+| `game_password` | (empty) | Account password for re-login after logout (sensitive) |
+| `minutes_to_wait_before_login` | 30 | Minutes to wait after logout before attempting login again |
 
 **NOTE**: If during the farming the bot starts working in weird ways, most likely it's because the 7DS window has auto-resized to the wrong size. To restore the right size, use the "Resize" button.
 

@@ -41,6 +41,32 @@ from utilities.models import (
 )
 from utilities.vision import Vision
 
+# Keys the GUI may write via save_config_updates; must stay aligned with config.yaml usage elsewhere.
+APP_CONFIG_KEYS = frozenset(
+    {
+        "ntfy_private_channel",
+        "stuck_timeout_minutes",
+        "notification_cooldown_minutes",
+        "max_notifications_per_incident",
+        "game_password",
+        "minutes_to_wait_before_login",
+    }
+)
+
+# Defaults when a key is missing (matches farming_factory.py config.get fallbacks).
+APP_CONFIG_DEFAULTS = {
+    "ntfy_private_channel": "",
+    "stuck_timeout_minutes": 10,
+    "notification_cooldown_minutes": 5,
+    "max_notifications_per_incident": 5,
+    "game_password": "",
+    "minutes_to_wait_before_login": 30,
+}
+
+
+def get_config_yaml_path() -> str:
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config.yaml")
+
 
 class Config:
     """Thread-safe lazy-loading config accessor for scripts/config/config.yaml."""
@@ -59,8 +85,23 @@ class Config:
                     self._data = {}
             return self._data.get(key, default)
 
+    def reload(self):
+        """Drop cached YAML so the next get() reads from disk."""
+        with self._lock:
+            self._data = None
 
-config = Config(os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "config.yaml"))
+
+config = Config(get_config_yaml_path())
+
+
+def get_minutes_to_wait_before_login() -> int:
+    """Minutes to wait after logout before attempting login again (from config.yaml)."""
+    raw = config.get("minutes_to_wait_before_login", APP_CONFIG_DEFAULTS["minutes_to_wait_before_login"])
+    try:
+        n = int(raw)
+        return max(1, min(1440, n))
+    except (TypeError, ValueError):
+        return int(APP_CONFIG_DEFAULTS["minutes_to_wait_before_login"])
 
 
 class ClickTracker:
@@ -939,8 +980,53 @@ def re_open_7ds_window() -> bool:
 def load_yaml_config(file_path: str) -> dict:
     """Load a YAML configuration file and return its contents as a dictionary."""
     with open(file_path, "r") as file:
-        config = yaml.safe_load(file)
-    return config
+        data = yaml.safe_load(file)
+    return data if isinstance(data, dict) else {}
+
+
+def load_full_config_dict() -> dict:
+    """Load scripts/config/config.yaml for merge-writes; missing or invalid file yields {}."""
+    path = get_config_yaml_path()
+    try:
+        data = load_yaml_config(path)
+        return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, yaml.YAMLError, OSError):
+        return {}
+
+
+def save_config_updates(updates: dict) -> None:
+    """Merge allowed keys into config.yaml and atomically replace the file."""
+    path = get_config_yaml_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    merged = load_full_config_dict()
+    for key, value in updates.items():
+        if key in APP_CONFIG_KEYS:
+            merged[key] = value
+    merged.pop("default_game_password", None)
+    parent = os.path.dirname(path)
+    fd, tmp_path = tempfile.mkstemp(prefix="config_", suffix=".yaml.tmp", dir=parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            yaml.safe_dump(merged, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        os.replace(tmp_path, path)
+    except Exception:
+        with contextlib.suppress(OSError):
+            os.remove(tmp_path)
+        raise
+
+
+def test_ntfy_connection() -> tuple[bool, str]:
+    """POST a one-line test message synchronously; returns (success, message for UI)."""
+    channel = (config.get("ntfy_private_channel") or "").strip()
+    if not channel:
+        return False, "Set a topic and save, or leave empty to disable notifications."
+    try:
+        url = f"https://ntfy.sh/{channel}"
+        resp = requests.post(url, data=b"AutoFarmers: test notification", timeout=10)
+        resp.raise_for_status()
+        return True, "Test notification sent."
+    except requests.RequestException as e:
+        return False, f"Failed to send: {e}"
 
 
 def send_push_notification(message: str, screenshot: np.ndarray | None = None):

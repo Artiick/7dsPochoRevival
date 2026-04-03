@@ -18,6 +18,7 @@ from utilities.utilities import (
     drag_im,
     find,
     find_and_click,
+    get_minutes_to_wait_before_login,
     press_key,
     type_word,
 )
@@ -168,7 +169,7 @@ class IFarmer:
         if (
             not login_attempted
             and not IFarmer.first_login
-            and time.time() - IFarmer.logged_out_time < MINUTES_TO_WAIT_BEFORE_LOGIN * 60
+            and time.time() - IFarmer.logged_out_time < get_minutes_to_wait_before_login() * 60
         ):
             time.sleep(1)
             return
@@ -226,7 +227,7 @@ class IFarmer:
         elif find(vio.password, screenshot) and self.current_state != States.LOGIN_SCREEN:
             self.current_state = States.LOGIN_SCREEN
             IFarmer.logged_out_time = time.time()
-            print(f"We've been logged out! Waiting {MINUTES_TO_WAIT_BEFORE_LOGIN} mins to log back in...")
+            print(f"We've been logged out! Waiting {get_minutes_to_wait_before_login()} mins to log back in...")
 
             # And close the fighter thread if open
             self.stop_fighter_thread()
