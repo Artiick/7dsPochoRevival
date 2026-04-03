@@ -89,9 +89,14 @@ REQUIREMENTS = {
     "Deer Floor 4": """
 <p><strong>Requirements:</strong><br>
 • Green Jorm, Thor, Red Freyr, Green Tyr/Green Hel<br>
-• <strong>IMPORTANT</strong>: You must make sure to kill Phase 1 in turn 3. 
-Play with your gears to guarantee this.<br>
+• <strong>IMPORTANT</strong> (whale mode <strong>off</strong>): The bot is built around finishing <strong>Phase 1 in 3</strong> player turns.
+Tune your gear so you can guarantee that.<br>
 • NO SKULD</p>
+    """,
+    "Deer Floor 4 Whale": """
+<p><strong>Whale mode</strong> (aggressive phase-1 opener on the <em>same</em> floor-4 team as normal Deer Floor 4 — not the separate Deer Whale comp):<br>
+• Targets finishing <strong>Phase 1 in 1</strong> player turn; needs the CC/gear to support that opener.<br>
+• With whale mode <strong>off</strong>, expect <strong>Phase 1 in 3</strong> turns instead.</p>
     """,
     "Dogs Floor 4": """
 <p><strong>Requirements:</strong><br>
@@ -165,6 +170,7 @@ the file <code>run_game.png</code> by it.
 # Maps base farmer names to their whale-mode requirement key and image filename.
 WHALE_MODE_CONFIG = {
     "Deer Farmer": {"requirements_key": "Deer Whale", "image": "deer_whale.jpg"},
+    "Deer Floor 4": {"requirements_key": "Deer Floor 4 Whale", "image": "deer_floor_4.png"},
     "Dogs Farmer": {"requirements_key": "Dogs Whale", "image": "dogs_whale_farmer.jpg"},
     "Snake Farmer": {"requirements_key": "Snake Whale", "image": "snake_whale_farmer.png"},
 }
@@ -258,6 +264,7 @@ FARMERS = [
             {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
+            {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
         ],
     },
     {

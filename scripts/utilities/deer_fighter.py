@@ -26,8 +26,18 @@ class DeerFighter(IFighter):
     # Keep track of what floor we're fighting
     current_floor = -1
 
-    def __init__(self, battle_strategy: IBattleStrategy, callback: Callable | None = None):
+    def __init__(
+        self,
+        battle_strategy: IBattleStrategy,
+        callback: Callable | None = None,
+        *,
+        whale: bool = False,
+    ):
         super().__init__(battle_strategy=battle_strategy, callback=callback)
+        self._whale = whale
+
+    def play_cards(self, **kwargs):
+        return super().play_cards(whale=self._whale, **kwargs)
 
     def fighting_state(self):
 

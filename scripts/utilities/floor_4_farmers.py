@@ -54,6 +54,8 @@ class DeerFloor4Farmer(IFloor4Farmer):
         max_runs="inf",
         do_dailies=False,
         password: str | None = None,
+        *,
+        whale: bool = False,
     ):
 
         super().__init__(
@@ -70,6 +72,7 @@ class DeerFloor4Farmer(IFloor4Farmer):
         self.fighter: IFighter = DeerFighter(
             battle_strategy=battle_strategy,
             callback=self.fight_complete_callback,
+            whale=whale,
         )
 
 
