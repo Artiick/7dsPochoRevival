@@ -210,7 +210,6 @@ FARMERS = [
         "name": "Demon Farmer",
         "script": "DemonFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {
                 "name": "--indura-diff",
                 "label": "Indura Difficulty",
@@ -233,7 +232,6 @@ FARMERS = [
         "name": "Guild Boss Farmer",
         "script": "GuildBossFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
     },
@@ -241,7 +239,6 @@ FARMERS = [
         "name": "Bird Farmer",
         "script": "BirdFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
@@ -250,7 +247,6 @@ FARMERS = [
         "name": "Bird Floor 4",
         "script": "BirdFloor4Farmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
@@ -259,7 +255,6 @@ FARMERS = [
         "name": "Deer Farmer",
         "script": "DeerFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
@@ -269,7 +264,6 @@ FARMERS = [
         "name": "Deer Floor 4",
         "script": "DeerFloor4Farmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
@@ -279,7 +273,6 @@ FARMERS = [
         "name": "Dogs Floor 4",
         "script": "DogsFloor4Farmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
@@ -288,7 +281,6 @@ FARMERS = [
         "name": "Dogs Farmer",
         "script": "DogsFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
@@ -298,7 +290,6 @@ FARMERS = [
         "name": "Snake Farmer",
         "script": "SnakeFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
@@ -308,7 +299,6 @@ FARMERS = [
         "name": "Rat Farmer",
         "script": "RatFarmer.py",
         "args": [
-            {"name": "--password", "label": "Password", "type": "text", "default": ""},
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
@@ -392,6 +382,22 @@ FARMERS = [
         "args": [],
     },
 ]
+
+# Farmer scripts that accept --password / -p (must match argparse in each script).
+PASSWORD_CLI_SCRIPTS = frozenset(
+    {
+        "BirdFarmer.py",
+        "BirdFloor4Farmer.py",
+        "DeerFarmer.py",
+        "DeerFloor4Farmer.py",
+        "DogsFarmer.py",
+        "DogsFloor4Farmer.py",
+        "DemonFarmer.py",
+        "GuildBossFarmer.py",
+        "RatFarmer.py",
+        "SnakeFarmer.py",
+    }
+)
 
 
 class AboutTab(QWidget):
@@ -671,7 +677,9 @@ class SettingsTab(QWidget):
         layout.setSpacing(14)
 
         intro = QLabel(
-            "<strong>App settings</strong> (stored in <code>scripts/config/config.yaml</code>)."
+            "<strong>App settings</strong> (all in <code>scripts/config/config.yaml</code>): "
+            "ntfy topic, stuck alerts, game password, and post-logout login timing. "
+            "Do not commit this file if it contains secrets you care about."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -737,6 +745,33 @@ class SettingsTab(QWidget):
         stuck_group.setLayout(stuck_form)
         layout.addWidget(stuck_group)
 
+        pwd_group = QGroupBox("Game password and re-login")
+        pwd_outer = QVBoxLayout()
+        pwd_help = QLabel(
+            "Stored as plaintext in <code>config.yaml</code> as <code>game_password</code>. "
+            "When the game shows the login screen after a disconnect or logout, the bot uses this password to sign back in. "
+            "Password-capable farmers get <code>--password</code> from the text below (or from the saved file if this field is empty). "
+            "After logout, the bot waits <strong>Wait before login retry</strong> minutes before attempting to log in again."
+        )
+        pwd_help.setWordWrap(True)
+        pwd_help.setStyleSheet("color: #555;")
+        pwd_outer.addWidget(pwd_help)
+        pwd_row = QHBoxLayout()
+        pwd_row.addWidget(QLabel("Password:"))
+        self.password_edit = QLineEdit()
+        self.password_edit.setEchoMode(QLineEdit.Password)
+        self.password_edit.setPlaceholderText("Empty uses game_password from file only")
+        pwd_row.addWidget(self.password_edit)
+        pwd_outer.addLayout(pwd_row)
+        login_wait_form = QFormLayout()
+        self.login_wait_spin = QSpinBox()
+        self.login_wait_spin.setRange(1, 1440)
+        self.login_wait_spin.setSuffix(" min")
+        login_wait_form.addRow("Wait before login retry:", self.login_wait_spin)
+        pwd_outer.addLayout(login_wait_form)
+        pwd_group.setLayout(pwd_outer)
+        layout.addWidget(pwd_group)
+
         actions = QHBoxLayout()
         self.save_btn = QPushButton("Save")
         self.save_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
@@ -753,7 +788,7 @@ class SettingsTab(QWidget):
         layout.addWidget(self.status_label)
 
         footnote = QLabel(
-            "Farmers already running keep their old stuck-detection settings until you stop and start them again."
+            "Farmers already running keep their old stuck-detection and login-wait settings until you stop and start them again."
         )
         footnote.setWordWrap(True)
         footnote.setStyleSheet("color: #666; font-size: 11px;")
@@ -776,17 +811,28 @@ class SettingsTab(QWidget):
         self.stuck_spin.setValue(self._int_from_data(data, "stuck_timeout_minutes"))
         self.cooldown_spin.setValue(self._int_from_data(data, "notification_cooldown_minutes"))
         self.max_notif_spin.setValue(self._int_from_data(data, "max_notifications_per_incident"))
+        pw = data.get("game_password", APP_CONFIG_DEFAULTS["game_password"])
+        if pw is None or str(pw).strip() == "":
+            legacy = data.get("default_game_password")
+            if legacy is not None and str(legacy).strip() != "":
+                pw = legacy
+        self.password_edit.setText("" if pw is None else str(pw))
+        self.login_wait_spin.setValue(self._int_from_data(data, "minutes_to_wait_before_login"))
         self.status_label.setText("Reloaded from disk.")
         self.status_label.setStyleSheet("color: #666;")
 
     def on_save(self):
         try:
+            stripped_pwd = self.password_edit.text().strip()
+            self.password_edit.setText(stripped_pwd)
             save_config_updates(
                 {
                     "ntfy_private_channel": self.topic_edit.text().strip(),
                     "stuck_timeout_minutes": self.stuck_spin.value(),
                     "notification_cooldown_minutes": self.cooldown_spin.value(),
                     "max_notifications_per_incident": self.max_notif_spin.value(),
+                    "game_password": stripped_pwd,
+                    "minutes_to_wait_before_login": self.login_wait_spin.value(),
                 }
             )
             config.reload()
@@ -806,9 +852,10 @@ class SettingsTab(QWidget):
 class FarmerTab(QWidget):
     _COLOR_TAG_RE = re.compile(r"<color=([^>]+)>(.*?)</color>", re.IGNORECASE | re.DOTALL)
 
-    def __init__(self, farmer, parent=None):
+    def __init__(self, farmer, password_supplier=None, parent=None):
         super().__init__(parent)
         self.farmer = farmer
+        self._password_supplier = password_supplier
         self.process = None
         self.output_lines = []
         self.paused = False
@@ -860,8 +907,6 @@ class FarmerTab(QWidget):
                 else:
                     widget = QLineEdit()
                     widget.setText(arg["default"])
-                    if arg["label"].lower() == "password":
-                        widget.setEchoMode(QLineEdit.Password)
                 self.arg_widgets[arg["name"]] = widget
                 args_layout.addRow(arg["label"] + ":", widget)
 
@@ -980,6 +1025,22 @@ class FarmerTab(QWidget):
                     args.extend([arg["name"]] + selected)
             elif value := widget.text():
                 args.extend([arg["name"], value])
+        if self.farmer["script"] in PASSWORD_CLI_SCRIPTS:
+            pw = ""
+            if self._password_supplier:
+                try:
+                    pw = self._password_supplier() or ""
+                except Exception:
+                    pw = ""
+            pw = (pw or "").strip()
+            if not pw:
+                data = load_full_config_dict()
+                raw = data.get("game_password", APP_CONFIG_DEFAULTS["game_password"])
+                if raw is None or str(raw).strip() == "":
+                    raw = data.get("default_game_password")
+                pw = ("" if raw is None else str(raw)).strip()
+            if pw:
+                args.extend(["--password", pw])
         return args
 
     def start_farmer(self):
@@ -1279,11 +1340,14 @@ class MainWindow(QMainWindow):
         about_tab = AboutTab()
         self.tabs.addTab(about_tab, "About")
 
-        self.tabs.addTab(SettingsTab(), "Settings")
+        settings_tab = SettingsTab()
+        self.tabs.addTab(settings_tab, "Settings")
 
-        # Add farmer tabs
         for farmer in FARMERS:
-            tab = FarmerTab(farmer)
+            tab = FarmerTab(
+                farmer,
+                password_supplier=lambda: settings_tab.password_edit.text(),
+            )
             self.tabs.addTab(tab, farmer["name"])
 
         # Set About tab as the default

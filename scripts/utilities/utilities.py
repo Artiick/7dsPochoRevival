@@ -48,6 +48,8 @@ APP_CONFIG_KEYS = frozenset(
         "stuck_timeout_minutes",
         "notification_cooldown_minutes",
         "max_notifications_per_incident",
+        "game_password",
+        "minutes_to_wait_before_login",
     }
 )
 
@@ -57,6 +59,8 @@ APP_CONFIG_DEFAULTS = {
     "stuck_timeout_minutes": 10,
     "notification_cooldown_minutes": 5,
     "max_notifications_per_incident": 5,
+    "game_password": "",
+    "minutes_to_wait_before_login": 30,
 }
 
 
@@ -88,6 +92,16 @@ class Config:
 
 
 config = Config(get_config_yaml_path())
+
+
+def get_minutes_to_wait_before_login() -> int:
+    """Minutes to wait after logout before attempting login again (from config.yaml)."""
+    raw = config.get("minutes_to_wait_before_login", APP_CONFIG_DEFAULTS["minutes_to_wait_before_login"])
+    try:
+        n = int(raw)
+        return max(1, min(1440, n))
+    except (TypeError, ValueError):
+        return int(APP_CONFIG_DEFAULTS["minutes_to_wait_before_login"])
 
 
 class ClickTracker:
@@ -988,6 +1002,7 @@ def save_config_updates(updates: dict) -> None:
     for key, value in updates.items():
         if key in APP_CONFIG_KEYS:
             merged[key] = value
+    merged.pop("default_game_password", None)
     parent = os.path.dirname(path)
     fd, tmp_path = tempfile.mkstemp(prefix="config_", suffix=".yaml.tmp", dir=parent)
     try:

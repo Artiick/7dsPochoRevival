@@ -9,7 +9,6 @@ import utilities.vision_images as vio
 from utilities.coordinates import Coordinates
 from utilities.general_farmer_interface import (
     CHECK_IN_HOUR,
-    MINUTES_TO_WAIT_BEFORE_LOGIN,
     IFarmer,
 )
 from utilities.general_farmer_interface import States as GlobalStates
@@ -22,6 +21,7 @@ from utilities.utilities import (
     find,
     find_and_click,
     find_floor_coordinates,
+    get_minutes_to_wait_before_login,
     screenshot_testing,
 )
 
@@ -68,7 +68,7 @@ class DemonicBeastFarmer(IFarmer, abc.ABC):
         if password:
             IFarmer.password = password
             print("Stored the account password locally in case we need to log in again.")
-            print(f"We'll wait {MINUTES_TO_WAIT_BEFORE_LOGIN} mins. before attempting a log in.")
+            print(f"We'll wait {get_minutes_to_wait_before_login()} mins. before attempting a log in.")
 
         # In case we want to do dailies at the specified hour
         IFarmer.do_dailies = do_dailies

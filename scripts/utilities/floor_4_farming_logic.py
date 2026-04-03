@@ -13,7 +13,6 @@ from utilities.coordinates import Coordinates
 from utilities.fighting_strategies import IBattleStrategy
 from utilities.general_farmer_interface import (
     CHECK_IN_HOUR,
-    MINUTES_TO_WAIT_BEFORE_LOGIN,
     PACIFIC_TIMEZONE,
     IFarmer,
 )
@@ -25,6 +24,7 @@ from utilities.utilities import (
     drag_im,
     find,
     find_and_click,
+    get_minutes_to_wait_before_login,
 )
 
 logger = LoggerWrapper("Floor4Logger", log_file="floor_4.log")
@@ -62,7 +62,7 @@ class IFloor4Farmer(IFarmer):
         if password:
             IFarmer.password = password
             print("Stored the account password locally in case we need to log in again.")
-            print(f"We'll wait {MINUTES_TO_WAIT_BEFORE_LOGIN} mins. before attempting a log in.")
+            print(f"We'll wait {get_minutes_to_wait_before_login()} mins. before attempting a log in.")
 
         # In case we want to do dailies at the specified hour
         IFarmer.do_dailies = do_dailies

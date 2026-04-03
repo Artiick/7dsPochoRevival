@@ -7,7 +7,6 @@ import numpy as np
 import pyautogui as pyautogui
 import utilities.vision_images as vio
 from utilities.card_data import CardColors
-from utilities.constants import MINUTES_TO_WAIT_BEFORE_LOGIN
 from utilities.coordinates import Coordinates
 from utilities.dk_fighter import DemonKingFighter
 from utilities.general_farmer_interface import CHECK_IN_HOUR, IFarmer
