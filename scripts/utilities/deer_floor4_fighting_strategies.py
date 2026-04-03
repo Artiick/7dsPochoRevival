@@ -41,11 +41,15 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
     # What color cards we're running on phase 3
     _color_cards_picked_p3 = None
 
+    # Whale phase-2: prospective double-red sequence (one-shot via flag)
+    _phase2_double_red_used = False
+
     def _initialize_static_variables(self):
         DeerFloor4BattleStrategy.turn = 0
         DeerFloor4BattleStrategy._phase_initialized = set()
         DeerFloor4BattleStrategy._color_cards_used_p2t0 = None
         DeerFloor4BattleStrategy._color_cards_picked_p3 = None
+        DeerFloor4BattleStrategy._phase2_double_red_used = False
 
     @staticmethod
     def _pick_or_fallback(
@@ -80,7 +84,9 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
                 hand_of_cards, picked_cards, card_turn=card_turn, whale=bool(kwargs.get("whale", False))
             )
         elif phase == 2:
-            card_index = self.get_next_card_index_phase2(hand_of_cards, picked_cards, card_turn=card_turn)
+            card_index = self.get_next_card_index_phase2(
+                hand_of_cards, picked_cards, card_turn=card_turn, whale=bool(kwargs.get("whale", False))
+            )
         elif phase == 3:
             card_index = self.get_next_card_index_phase3(hand_of_cards, picked_cards, card_turn=card_turn)
         elif phase == 4:
@@ -282,7 +288,9 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
         print("[WARN] We couldn't finish in 3 turns...")
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
-    def get_next_card_index_phase2(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int) -> int:
+    def get_next_card_index_phase2(
+        self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int, *, whale: bool = False
+    ) -> int:
         # sourcery skip: extract-method
         """Extract the indices based on the list of cards and the current phase"""
 
@@ -316,13 +324,19 @@ class DeerFloor4BattleStrategy(IBattleStrategy):
         )
         green_card_ids = reorder_jorms_heal(hand_of_cards, green_card_ids)
 
-        # Turn 0 only: double-red / Freyr setup (needs red indices in the current hand)
         num_red_cards = count_cards(hand_of_cards + picked_cards, is_red_card)
-        if DeerFloor4BattleStrategy.turn == 0 and num_red_cards > 1 and len(red_card_ids):
+        t = DeerFloor4BattleStrategy.turn
+        double_red = num_red_cards > 1 and len(red_card_ids) and (
+            (not whale and t == 0)
+            or (whale and not DeerFloor4BattleStrategy._phase2_double_red_used and t in (0, 1, 2))
+        )
+        if double_red:
             if card_turn == 0:
                 return red_card_ids[0]
             if card_turn <= 2:
                 return [red_card_ids[0], red_card_ids[0] + 1]
+            if whale:
+                DeerFloor4BattleStrategy._phase2_double_red_used = True
             return red_card_ids[0]
 
         card_groups = {"green": green_card_ids, "red": red_card_ids, "blue": blue_card_ids}
