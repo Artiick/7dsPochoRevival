@@ -58,14 +58,18 @@ class DogsFighter(IFighter):
             print("Fighting complete! Is it true? Double check...")
             self.current_state = FightingStates.FIGHTING_COMPLETE
 
-        elif (available_card_slots := DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)) > 0:
-            # We see empty card slots, it means its our turn
-            self.available_card_slots = available_card_slots
-            print(f"MY TURN, selecting {available_card_slots} cards...")
-            self.current_state = FightingStates.MY_TURN
+        elif self._try_enter_my_turn(screenshot):
+            pass
 
-            # # For debugging...
-            # self.count_empty_card_slots(screenshot, plot=True)
+    def _try_enter_my_turn(self, screenshot) -> bool:
+        """If empty card slots are visible, enter MY_TURN. Subclasses may override (e.g. Floor 4 first turn)."""
+        available_card_slots = DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)
+        if available_card_slots <= 0:
+            return False
+        self.available_card_slots = available_card_slots
+        print(f"MY TURN, selecting {available_card_slots} cards...")
+        self.current_state = FightingStates.MY_TURN
+        return True
 
     @staticmethod
     def count_empty_card_slots(screenshot, threshold=0.6, debug=False):
@@ -78,12 +82,13 @@ class DogsFighter(IFighter):
                 temp_rectangles, _ = vio_image.find_all_rectangles(
                     card_slot_image, threshold=threshold, method=cv2.TM_CCOEFF_NORMED
                 )
-                # Why twice??
-                rectangles.extend(temp_rectangles)
                 rectangles.extend(temp_rectangles)
 
-        # Group all rectangles
-        grouped_rectangles, _ = cv2.groupRectangles(rectangles, groupThreshold=1, eps=0.5)
+        # groupThreshold=1 means each cluster needs at least two detections; otherwise
+        # OpenCV drops the whole cluster. Our slot hits are usually one rect per slot
+        # (non-overlapping), so we duplicate the list once to supply the second vote.
+        doubled = rectangles + rectangles if rectangles else []
+        grouped_rectangles, _ = cv2.groupRectangles(doubled, groupThreshold=1, eps=0.5)
         if debug and len(grouped_rectangles):
             print(f"We have {len(grouped_rectangles)} empty slots.")
             # rectangles_fig = draw_rectangles(screenshot, np.array(rectangles), line_color=(0, 0, 255))
