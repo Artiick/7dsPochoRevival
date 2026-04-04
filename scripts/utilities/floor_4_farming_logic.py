@@ -207,7 +207,7 @@ class IFloor4Farmer(IFarmer):
 
         If ``stop_farmer`` is True, the farmer exits immediately without taking the lock,
         incrementing ``total_count``, or updating success/defeat tallies — intentional for
-        clean shutdown (e.g. Dogs F4 stopping after phase 2).
+        clean shutdown (e.g. a fighter requesting early exit).
         """
         if kwargs.get("stop_farmer", False):
             reason = kwargs.get("reason", "Stopping the Floor 4 farmer.")
