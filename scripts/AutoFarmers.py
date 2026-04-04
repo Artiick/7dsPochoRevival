@@ -271,20 +271,20 @@ FARMERS = [
         ],
     },
     {
+        "name": "Dogs Floor 4",
+        "script": "DogsFloor4Farmer.py",
+        "args": [
+            {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
+            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
+        ],
+    },
+    {
         "name": "Dogs Farmer",
         "script": "DogsFarmer.py",
         "args": [
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
-        ],
-    },
-    {
-        "name": "Dogs Floor 4",
-        "script": "DogsFloor4Farmer.py",
-        "args": [
-            {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
-            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
     },
     {
