@@ -26,6 +26,9 @@ class DogsFighter(IFighter):
     # Keep track of the current floor
     current_floor = 1
 
+    # Subclasses (e.g. Floor 4) may set False to skip auto-clicking Escalin talent on phase 3 entry.
+    activate_phase3_escalin_talent = True
+
     def __init__(self, battle_strategy: IBattleStrategy, callback: Callable | None = None):
         super().__init__(battle_strategy=battle_strategy, callback=callback)
 
@@ -142,7 +145,9 @@ class DogsFighter(IFighter):
             IFighter.current_phase = 3
             print("Clicking on dark dog, because current phase:", IFighter.current_phase)
             click_im(Coordinates.get_coordinates("dark_dog"), window_location)
-            if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+            if type(self).activate_phase3_escalin_talent and find_and_click(
+                vio.talent_escalin, screenshot, window_location, threshold=0.6
+            ):
                 print("Phase 3 entry: activating talent_escalin")
                 time.sleep(2.5)
 

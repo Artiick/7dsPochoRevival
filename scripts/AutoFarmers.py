@@ -110,7 +110,7 @@ Tune your gear so you can guarantee that.<br>
     """,
     "Dogs Floor 4": """
 <p><strong>Requirements:</strong><br>
-• Uses the scripted Dogs Floor 4 team (Escalin, Roxy, Nasiens, Thonar) and phase-specific card logic.</p>
+• Escalin, Lillia/Roxy(recommended), Nasiens, Thonar</p>
     """,
     "Dogs Farmer": """
 <p><strong>Requirements:</strong><br>

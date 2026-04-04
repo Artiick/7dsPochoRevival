@@ -22,7 +22,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     roxy_in_team = False
 
     def _initialize_static_variables(self):
-        DogsFloor4BattleStrategy.turn = 0
         DogsFloor4BattleStrategy._phase_initialized = set()
         DogsFloor4BattleStrategy._last_phase_seen = None
 
@@ -34,7 +33,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
     def _maybe_reset(self, phase_id: str):
         if phase_id not in DogsFloor4BattleStrategy._phase_initialized:
-            DogsFloor4BattleStrategy.turn = 0
             DogsFloor4BattleStrategy._phase_initialized.add(phase_id)
 
     def get_next_card_index(
@@ -76,10 +74,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     def get_next_card_index_phase1(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
         self._maybe_reset("phase_1")
 
-        print("What turn are we in?", IBattleStrategy._fight_turn)
+        print("What turn are we in?", IBattleStrategy.fight_turn)
 
         # Phase 1: First turn, play a sequence of cards
-        if IBattleStrategy._fight_turn == 0:
+        if IBattleStrategy.fight_turn == 0:
             stance_already_picked = any(
                 self._card_matches_any(c, ("thonar_stance",)) for c in picked_cards if c.card_image is not None
             )

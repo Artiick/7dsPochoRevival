@@ -31,15 +31,15 @@ class IBattleStrategy(abc.ABC):
     picked_cards: list[Card] = []
 
     # What's the current fight turn?
-    _fight_turn = 0
+    fight_turn = 0
 
     def increment_fight_turn(self):
         """Increment the fight turn"""
-        IBattleStrategy._fight_turn += 1
+        IBattleStrategy.fight_turn += 1
 
     def reset_fight_turn(self):
-        """Reset IBattleStrategy._fight_turn. Normally IFighter.run_wrapper (finally); mid-fight resets are rare (e.g. Indura phase 3)."""
-        IBattleStrategy._fight_turn = 0
+        """Reset IBattleStrategy.fight_turn. Normally IFighter.run_wrapper (finally); mid-fight resets are rare (e.g. Indura phase 3)."""
+        IBattleStrategy.fight_turn = 0
 
     def pick_cards(self, picked_cards: list[Card] = None, num_units=4, **kwargs) -> tuple[list[Card], list[int]]:
         """**kwargs just for compatibility across classes and subclasses. Probably not the best coding..."""
@@ -204,8 +204,7 @@ class SmarterBattleStrategy(IBattleStrategy):
                 return disabled_ids[-1]
 
         print(
-            "We don't meet any of the previous criteria, defaulting to the rightmost index "
-            "that isn't GROUND or NONE"
+            "We don't meet any of the previous criteria, defaulting to the rightmost index " "that isn't GROUND or NONE"
         )
         return cls._rightmost_playable_fallback_index(hand_of_cards)
 
