@@ -18,14 +18,18 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     turn = 0
     _phase_initialized = set()
     _last_phase_seen = None
+    lillia_in_team = False
+    roxy_in_team = False
 
     def _initialize_static_variables(self):
         DogsFloor4BattleStrategy.turn = 0
         DogsFloor4BattleStrategy._phase_initialized = set()
         DogsFloor4BattleStrategy._last_phase_seen = None
 
-    def reset_run_state(self):
+    def reset_run_state(self, *, lillia_in_team=False, roxy_in_team=False):
         """Called from DogsFloor4Fighter.run before the fight loop."""
+        DogsFloor4BattleStrategy.lillia_in_team = lillia_in_team
+        DogsFloor4BattleStrategy.roxy_in_team = roxy_in_team
         self._initialize_static_variables()
 
     def _maybe_reset(self, phase_id: str):

@@ -36,8 +36,9 @@ class DogsFloor4Fighter(DogsFighter):
             DogsFloor4Fighter._f4_first_my_turn_pending = False
         return entered
 
-    def run(self, floor=4):
-        self.battle_strategy.reset_run_state()
+    def run(self, floor=4, lillia_in_team=False, roxy_in_team=False):
+
+        self.battle_strategy.reset_run_state(lillia_in_team=lillia_in_team, roxy_in_team=roxy_in_team)
         DogsFloor4Fighter._f4_first_my_turn_pending = True
 
         super().run(floor=floor)

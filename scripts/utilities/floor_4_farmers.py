@@ -16,6 +16,7 @@ from utilities.dogs_floor4_fighter import DogsFloor4Fighter
 from utilities.dogs_floor4_fighting_strategies import DogsFloor4BattleStrategy
 from utilities.fighting_strategies import IBattleStrategy
 from utilities.floor_4_farming_logic import IFloor4Farmer, States
+from utilities.utilities import find
 
 
 class BirdFloor4Farmer(IFloor4Farmer):
@@ -79,6 +80,9 @@ class DeerFloor4Farmer(IFloor4Farmer):
 
 class DogsFloor4Farmer(IFloor4Farmer):
 
+    lillia_in_team = False
+    roxy_in_team = False
+
     def __init__(
         self,
         battle_strategy: type[DogsFloor4BattleStrategy],
@@ -101,3 +105,19 @@ class DogsFloor4Farmer(IFloor4Farmer):
             battle_strategy=battle_strategy,
             callback=self.fight_complete_callback,
         )
+
+    def before_fighter_thread_start(self, screenshot):
+        DogsFloor4Farmer.lillia_in_team = False
+        DogsFloor4Farmer.roxy_in_team = False
+        if find(vio.lillia_in_team, screenshot):
+            print("Lillia is in the team!")
+            DogsFloor4Farmer.lillia_in_team = True
+        elif find(vio.roxy_in_team, screenshot):
+            print("Roxy is in the team!")
+            DogsFloor4Farmer.roxy_in_team = True
+
+    def get_fighter_run_kwargs(self) -> dict:
+        return {
+            "lillia_in_team": DogsFloor4Farmer.lillia_in_team,
+            "roxy_in_team": DogsFloor4Farmer.roxy_in_team,
+        }

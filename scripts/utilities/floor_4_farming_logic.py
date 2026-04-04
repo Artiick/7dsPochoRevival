@@ -88,6 +88,13 @@ class IFloor4Farmer(IFarmer):
         IFarmer.daily_farmer.set_daily_pvp(True)
         IFarmer.daily_farmer.add_complete_callback(self.dailies_complete_callback)
 
+    def before_fighter_thread_start(self, screenshot):
+        """Called immediately before spawning the fighter thread; subclasses may refresh per-run state."""
+
+    def get_fighter_run_kwargs(self) -> dict:
+        """Keyword arguments passed to ``self.fighter.run`` when starting the Floor 4 fight thread."""
+        return {}
+
     def exit_message(self):
         super().exit_message()
         percent = (
@@ -192,8 +199,12 @@ class IFloor4Farmer(IFarmer):
         # Set the fighter thread
         if (self.fight_thread is None or not self.fight_thread.is_alive()) and self.current_state == States.FIGHTING:
             print("Floor4 fight started!")
+            self.before_fighter_thread_start(screenshot)
             self.fight_thread = threading.Thread(
-                target=self.fighter.run, name="Floor4FighterThread", daemon=True
+                target=self.fighter.run,
+                name="Floor4FighterThread",
+                daemon=True,
+                kwargs=self.get_fighter_run_kwargs(),
             )
             self.fight_thread.start()
 
