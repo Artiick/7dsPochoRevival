@@ -17,7 +17,7 @@ def main():
     FarmingFactory.main_loop(
         farmer=DogsFloor4Farmer,
         battle_strategy=DogsFloor4BattleStrategy,
-        starting_state=States.GOING_TO_DB,
+        starting_state=States.FIGHTING,
         max_runs=args.clears,
         password=args.password,
         do_dailies=args.do_dailies,

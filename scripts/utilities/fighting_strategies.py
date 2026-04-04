@@ -135,6 +135,15 @@ class SmarterBattleStrategy(IBattleStrategy):
     """This strategy assumes the card types can be read properly.
     It prioritizes one recovery and one stance card, and then it picks attack cards for the remaining slots."""
 
+    @staticmethod
+    def _rightmost_playable_fallback_index(hand_of_cards: list[Card]) -> int:
+        """Rightmost slot that is not GROUND (strategy masks) or NONE (empty). If none, -1 for legacy last-slot behavior."""
+        for i in range(len(hand_of_cards) - 1, -1, -1):
+            t = hand_of_cards[i].card_type
+            if t not in (CardTypes.GROUND, CardTypes.NONE):
+                return i
+        return -1
+
     @classmethod
     def get_next_card_index(cls, hand_of_cards: list[Card], picked_cards: list[Card], **kwargs) -> int:
         """Apply the logic to extract the right indices."""
@@ -194,8 +203,11 @@ class SmarterBattleStrategy(IBattleStrategy):
             if len(disabled_ids):
                 return disabled_ids[-1]
 
-        # print("We don't meet any of the previous criteria, defaulting to the rightmost index")
-        return -1
+        print(
+            "We don't meet any of the previous criteria, defaulting to the rightmost index "
+            "that isn't GROUND or NONE"
+        )
+        return cls._rightmost_playable_fallback_index(hand_of_cards)
 
 
 def play_stance_card(card_types: np.ndarray, picked_card_types: np.ndarray, card_ranks: np.ndarray = None):

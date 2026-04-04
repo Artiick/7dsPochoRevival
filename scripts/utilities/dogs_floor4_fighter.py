@@ -1,4 +1,4 @@
-"""Dogs Floor 4 fighter: first MY_TURN uses talent_escalin; then base empty-slot detection."""
+"""Dogs Floor 4 fighter: first MY_TURN waits for talent_escalin (no empty-slot shortcut until then)."""
 
 from collections.abc import Callable
 
@@ -18,7 +18,10 @@ class DogsFloor4Fighter(DogsFighter):
         super().__init__(battle_strategy=battle_strategy, callback=callback)
 
     def _try_enter_my_turn(self, screenshot) -> bool:
-        if DogsFloor4Fighter._f4_first_my_turn_pending and find(vio.talent_escalin, screenshot, threshold=0.7):
+        if DogsFloor4Fighter._f4_first_my_turn_pending:
+            if not find(vio.talent_escalin, screenshot, threshold=0.7):
+                # Do not use empty-slot detection yet; wait until the talent button is visible.
+                return False
             available = DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)
             if available <= 0:
                 available = 4
