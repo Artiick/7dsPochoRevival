@@ -98,7 +98,6 @@ class DogsFloor4Fighter(DogsFighter):
             self.battle_strategy.reset_fight_turn()
 
     def run(self, floor=4, lillia_in_team=False, roxy_in_team=False):
-
         self.battle_strategy.reset_run_state(lillia_in_team=lillia_in_team, roxy_in_team=roxy_in_team)
         DogsFloor4Fighter._f4_first_my_turn_pending = True
         DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start = False

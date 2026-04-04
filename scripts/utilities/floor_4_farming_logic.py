@@ -88,8 +88,8 @@ class IFloor4Farmer(IFarmer):
         IFarmer.daily_farmer.set_daily_pvp(True)
         IFarmer.daily_farmer.add_complete_callback(self.dailies_complete_callback)
 
-    def before_fighter_thread_start(self, screenshot):
-        """Called immediately before spawning the fighter thread; subclasses may refresh per-run state."""
+    def on_ready_to_fight_before_start(self, screenshot):
+        """Called in ``ready_to_fight_state`` after stamina handling, before Start; subclasses may inspect UI."""
 
     def get_fighter_run_kwargs(self) -> dict:
         """Keyword arguments passed to ``self.fighter.run`` when starting the Floor 4 fight thread."""
@@ -181,6 +181,8 @@ class IFloor4Farmer(IFarmer):
             # screenshot_testing(screenshot, vio.restore_stamina)
             return
 
+        self.on_ready_to_fight_before_start(screenshot)
+
         # Try to start the fight
         find_and_click(vio.startbutton, screenshot, window_location)
 
@@ -199,7 +201,6 @@ class IFloor4Farmer(IFarmer):
         # Set the fighter thread
         if (self.fight_thread is None or not self.fight_thread.is_alive()) and self.current_state == States.FIGHTING:
             print("Floor4 fight started!")
-            self.before_fighter_thread_start(screenshot)
             self.fight_thread = threading.Thread(
                 target=self.fighter.run,
                 name="Floor4FighterThread",

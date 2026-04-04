@@ -106,9 +106,7 @@ class DogsFloor4Farmer(IFloor4Farmer):
             callback=self.fight_complete_callback,
         )
 
-    def before_fighter_thread_start(self, screenshot):
-        DogsFloor4Farmer.lillia_in_team = False
-        DogsFloor4Farmer.roxy_in_team = False
+    def on_ready_to_fight_before_start(self, screenshot):
         if find(vio.lillia_in_team, screenshot):
             print("Lillia is in the team!")
             DogsFloor4Farmer.lillia_in_team = True
