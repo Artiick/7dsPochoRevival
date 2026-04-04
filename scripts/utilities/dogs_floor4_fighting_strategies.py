@@ -33,11 +33,14 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     roxy_in_team = False
 
     removed_damage_cap = False
+    # HAM (Escalin/Roxy) only after fight_turn advances past the turn where cap removal was committed.
+    _defer_escalin_roxy_ham_until_after_fight_turn = -1
 
     def _initialize_static_variables(self):
         DogsFloor4BattleStrategy._phase_initialized = set()
         DogsFloor4BattleStrategy._last_phase_seen = None
         DogsFloor4BattleStrategy.removed_damage_cap = False
+        DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = -1
 
     def reset_run_state(self, *, lillia_in_team=False, roxy_in_team=False):
         """Called from DogsFloor4Fighter.run before the fight loop."""
@@ -207,6 +210,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             played_lillia_ids = self._tr(picked_cards, ("lillia_aoe",), CardRanks.GOLD)
             if played_thonar_ids.size >= 2 or played_lillia_ids.size >= 1:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
+                DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = IBattleStrategy.fight_turn
                 return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
             thonar_gauge_ids = self._tr(hand_of_cards, ("thonar_gauge",), CardRanks.GOLD)
@@ -234,6 +238,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
             if lillia_aoe_ids.size:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
+                DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = IBattleStrategy.fight_turn
                 print("Playing a GOLD Lillia card!")
                 return int(lillia_aoe_ids[-1])
 
@@ -244,6 +249,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     print("Playing a GOLD Thonar card!")
                     if played_thonar_ids.size == 1:
                         DogsFloor4BattleStrategy.removed_damage_cap = True
+                        DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = IBattleStrategy.fight_turn
                     return thonar_gauge_id
 
             # Re-enable Lillia/Thonar cards, we can/should play them here -- Maybe not needed, but just in case
@@ -253,6 +259,11 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         else:
             # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
+            if (
+                IBattleStrategy.fight_turn
+                <= DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn
+            ):
+                return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
             print("No more damage cap, let's go HAM!")
             escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
             roxy_ids = self._matching_card_ids(hand_of_cards, ROXY_TEMPLATES)
