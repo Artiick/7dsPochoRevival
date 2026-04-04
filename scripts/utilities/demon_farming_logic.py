@@ -6,10 +6,7 @@ import numpy as np
 import pyautogui as pyautogui
 import utilities.vision_images as vio
 from utilities.coordinates import Coordinates
-from utilities.general_farmer_interface import (
-    CHECK_IN_HOUR,
-    IFarmer,
-)
+from utilities.general_farmer_interface import CHECK_IN_HOUR, IFarmer
 from utilities.general_farmer_interface import States as GlobalStates
 from utilities.general_fighter_interface import IBattleStrategy, IFighter
 from utilities.indura_fighter import InduraFighter
@@ -242,7 +239,7 @@ class IDemonFarmer(IFarmer):
 
             elif IDemonFarmer.current_team_non_fairy:
                 IDemonFarmer.total_non_fairies += 1
-                print(f"We've seen a total of {IDemonFarmer.total_non_fairies} non-fairy teams")
+                # print(f"We've seen a total of {IDemonFarmer.total_non_fairies} non-fairy teams")
 
             return
 
@@ -368,12 +365,12 @@ class IDemonFarmer(IFarmer):
                 f"({percent:.2f}%)."
             )
 
-            if self.demon_to_farm == vio.indura_demon:
-                msg += (
-                    f"\nNon-fairy win ratio: {IDemonFarmer.wins_non_fairies}/"
-                    f"{IDemonFarmer.total_non_fairies} "
-                    f"({non_fairies_percent:.2f}%)"
-                )
+            # if self.demon_to_farm == vio.indura_demon:
+            #     msg += (
+            #         f"\nNon-fairy win ratio: {IDemonFarmer.wins_non_fairies}/"
+            #         f"{IDemonFarmer.total_non_fairies} "
+            #         f"({non_fairies_percent:.2f}%)"
+            #     )
 
             print(msg)
             print(f"We've missed {IDemonFarmer.missed_invites} invites.")
