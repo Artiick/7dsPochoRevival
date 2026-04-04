@@ -42,7 +42,7 @@ def development():
     # determine_relative_coordinates(screenshot)
 
     # print("Screenshot shape:", screenshot.shape)
-    # screenshot_testing(screenshot, vision_image=vio.cross, threshold=0.7)
+    screenshot_testing(screenshot, vision_image=vio.talent_escalin, threshold=0.7)
 
     # print("These many needle images found:", count_needle_image(vio.lvl_1_rule, screenshot, threshold=0.8))
 
