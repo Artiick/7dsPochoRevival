@@ -2,11 +2,13 @@
 
 from collections.abc import Callable
 
+import numpy as np
 import utilities.vision_images as vio
+from utilities.card_data import CardTypes
 from utilities.dogs_fighter import DogsFighter
 from utilities.dogs_floor4_fighting_strategies import DogsFloor4BattleStrategy
 from utilities.general_fighter_interface import FightingStates, IFighter
-from utilities.utilities import capture_window, find
+from utilities.utilities import capture_window, find, get_hand_cards
 
 
 class DogsFloor4Fighter(DogsFighter):
@@ -27,6 +29,10 @@ class DogsFloor4Fighter(DogsFighter):
             available = DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)
             if available <= 0:
                 available = 4
+            if available >= 3 and self._check_disabled_hand():
+                print("Our hand is fully disabled, let's restart the fight!")
+                self.current_state = FightingStates.EXIT_FIGHT
+                return True
             self.available_card_slots = available
             print(f"MY TURN (Floor 4 first turn: talent_escalin), selecting {available} cards...")
             self.current_state = FightingStates.MY_TURN
@@ -74,6 +80,15 @@ class DogsFloor4Fighter(DogsFighter):
             print("Finished my turn!")
             return 1
         return super().finish_turn()
+
+    def _check_disabled_hand(self) -> bool:
+        """If we have a disabled hand (same criteria as BirdFighter)."""
+        screenshot, _ = capture_window()
+        house_of_cards = get_hand_cards()
+
+        return np.all([card.card_type in [CardTypes.DISABLED, CardTypes.GROUND] for card in house_of_cards]) or find(
+            vio.skill_locked, screenshot, threshold=0.6
+        )
 
     def _identify_current_phase(self):
         prev = IFighter.current_phase

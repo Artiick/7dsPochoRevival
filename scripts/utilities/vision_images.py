@@ -268,6 +268,7 @@ lillia_aoe = Vision("dogs\\lillia_aoe.png")
 lillia_st = Vision("dogs\\lillia_st.png")
 roxy_in_team = Vision("dogs\\roxy_in_team.png")
 lillia_in_team = Vision("dogs\\lillia_in_team.png")
+dogs_damage_cap = Vision("dogs\\dogs_damage_cap.png")
 # lillia_ult = Vision("dogs\\lillia_ult.png")
 # Dogs whale strat
 freeze_icon = Vision("dogs\\freeze_icon.png")

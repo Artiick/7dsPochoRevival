@@ -1,15 +1,25 @@
+import time
 from collections.abc import Sequence
+from copy import deepcopy
 from typing import Final
 
 import utilities.vision_images as vio
 from utilities.card_data import Card, CardRanks, CardTypes
+from utilities.coordinates import Coordinates
 from utilities.fighting_strategies import IBattleStrategy, SmarterBattleStrategy
-from utilities.utilities import determine_card_merge, find
+from utilities.utilities import (
+    capture_window,
+    click_im,
+    determine_card_merge,
+    find,
+    find_and_click,
+)
 
 ESCALIN_TEMPLATES: Final[tuple[str, ...]] = ("escalin_st", "escalin_aoe", "escalin_ult")
 ROXY_TEMPLATES: Final[tuple[str, ...]] = ("roxy_st", "roxy_aoe", "roxy_ult")
 NASI_TEMPLATES: Final[tuple[str, ...]] = ("nasi_heal", "nasi_stun", "nasi_ult")
 THONAR_TEMPLATES: Final[tuple[str, ...]] = ("thonar_stance", "thonar_gauge", "thonar_ult")
+GAUGE_REMOVAL_TEMPLATES: Final[tuple[str, ...]] = ("thonar_gauge", "lillia_aoe")
 
 
 class DogsFloor4BattleStrategy(IBattleStrategy):
@@ -48,20 +58,18 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # If playing the card at i would bring i-1 and i+1 together and they would merge, and either
         # neighbor is Lillia AOE or Thonar gauge, mark the middle as GROUND so we do not trigger
         # that merge. (Run before blanket GROUND below so determine_card_merge still sees real types.)
-        protected = ("lillia_aoe", "thonar_gauge")
         for i in range(1, len(hand_of_cards) - 1):
             left, right = hand_of_cards[i - 1], hand_of_cards[i + 1]
             if determine_card_merge(left, right) and (
-                self._card_matches_any(left, protected) or self._card_matches_any(right, protected)
+                self._card_matches_any(left, GAUGE_REMOVAL_TEMPLATES)
+                or self._card_matches_any(right, GAUGE_REMOVAL_TEMPLATES)
             ):
                 hand_of_cards[i].card_type = CardTypes.GROUND
 
         # Never select Lillia AOE or Thonar gauge removal cards directly.
         for i, card in enumerate(hand_of_cards):
-            if self._card_matches_any(card, protected):
+            if self._card_matches_any(card, GAUGE_REMOVAL_TEMPLATES):
                 hand_of_cards[i].card_type = CardTypes.GROUND
-
-        print("After protection card types:", [card.card_type.name for card in hand_of_cards])
 
         # Phase-specify logic here
 
@@ -110,6 +118,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print("Playing escalin aoe")
                 return self._best_matching_card(hand_of_cards, ("escalin_aoe",))
 
+        # Let's disable Nasien's stance cancel card...
+        nasiens_stance_cancel_id = self._matching_card_ids(hand_of_cards, ("nasi_stun",))
+        if len(nasiens_stance_cancel_id) > 0:
+            print("Disabling Nasiens stance cancel card...")
+            hand_of_cards[nasiens_stance_cancel_id[-1]].card_type = CardTypes.DISABLED
+
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
     def get_next_card_index_phase2(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
@@ -140,27 +154,132 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 return [i, i + 1]
             print("Can't move a Nasiens card to get ult...")
 
-        print("After protection card types:", [card.card_type.name for card in hand_of_cards])
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
     def get_next_card_index_phase3(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
+        """Important: In phase 3, fight turns start at 1!"""
         self._maybe_reset("phase_3")
+
+        print("We're in turn", IBattleStrategy.fight_turn)
+
+        # First, play Nasiens ultimate if we have it
+        nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
+        if len(nasiens_ult_id) > 0:
+            return nasiens_ult_id[-1]
+
+        # If fight turn is <=2, just waste cards and disable Escalin cards
+        if IBattleStrategy.fight_turn <= 2:
+            for i in range(len(hand_of_cards)):
+                if self._card_matches_any(hand_of_cards[i], ESCALIN_TEMPLATES):
+                    print("Disabling Escalin cards")
+                    hand_of_cards[i].card_type = CardTypes.DISABLED
+
+            return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
+
+        # At this point, let's see if we can remove the damage cap thingy...
+        screenshot, window_location = capture_window()
+        have_damage_cap = find(vio.dogs_damage_cap, screenshot, threshold=0.6)
+        print("Do we see a damage cap thingy?", have_damage_cap)
+        if have_damage_cap:
+            remove_gauge_ids = self._matching_card_ids(hand_of_cards, GAUGE_REMOVAL_TEMPLATES, ranks=(CardRanks.GOLD,))
+            if len(remove_gauge_ids) < 2:
+                drag = self._best_gauge_merge_drag_indices(hand_of_cards)
+                if drag is not None:
+                    return drag
+                print("Not enough gold cards to remove gauges...")
+                return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
+
+            # Let's play Escalin's talent and do the ult gauge removal
+            if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+                print("Phase 3: activating Escalin talent!")
+                time.sleep(2.5)
+
+            if card_turn == 1:
+                # Gotta click light dog!
+                click_im(Coordinates.get_coordinates("light_dog"), window_location)
+
+            if card_turn <= 1 and type(self).roxy_in_team:
+                # Play Thonar's gauge cards!
+                thonar_gauge_id = self._best_matching_card(hand_of_cards, ("thonar_gauge",), ranks=(CardRanks.GOLD,))
+                if thonar_gauge_id != -1:
+                    return thonar_gauge_id
+            elif card_turn == 0 and type(self).lillia_in_team:
+                # Play Lillia's gauge cards!
+                lillia_aoe_id = self._best_matching_card(hand_of_cards, ("lillia_aoe",), ranks=(CardRanks.GOLD,))
+                if lillia_aoe_id != -1:
+                    return lillia_aoe_id
+
+            # Re-enable Lillia/Thonar cards, we can/should play them here
+            for i in range(len(hand_of_cards)):
+                if self._card_matches_any(hand_of_cards[i], GAUGE_REMOVAL_TEMPLATES):
+                    hand_of_cards[i].card_type = CardTypes.ATTACK
+
+        else:
+            # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
+            escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
+            roxy_ids = self._matching_card_ids(hand_of_cards, ROXY_TEMPLATES)
+            if len(escalin_ids) > 0:
+                return escalin_ids[-1]
+            if len(roxy_ids) > 0:
+                return roxy_ids[-1]
+
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
-    def _best_matching_card(self, hand_of_cards: list[Card], template_names: Sequence[str]) -> int:
-        matching_ids = self._matching_card_ids(hand_of_cards, template_names)
+    def _best_matching_card(
+        self,
+        hand_of_cards: list[Card],
+        template_names: Sequence[str],
+        *,
+        ranks: Sequence[CardRanks] | None = None,
+    ) -> int:
+        matching_ids = self._matching_card_ids(hand_of_cards, template_names, ranks=ranks)
         return matching_ids[-1] if matching_ids else -1
 
-    def _matching_card_ids(self, hand_of_cards: list[Card], template_names: Sequence[str]) -> list[int]:
+    def _matching_card_ids(
+        self,
+        hand_of_cards: list[Card],
+        template_names: Sequence[str],
+        *,
+        ranks: Sequence[CardRanks] | None = None,
+    ) -> list[int]:
+        allowed_ranks = frozenset(ranks) if ranks is not None else None
         return sorted(
             [
                 idx
                 for idx, card in enumerate(hand_of_cards)
                 if card.card_type not in (CardTypes.DISABLED, CardTypes.NONE, CardTypes.GROUND)
                 and self._card_matches_any(card, template_names)
+                and (allowed_ranks is None or card.card_rank in allowed_ranks)
             ],
             key=lambda idx: (hand_of_cards[idx].card_rank.value, idx),
         )
+
+    def _best_gauge_merge_drag_indices(self, hand_of_cards: list[Card]) -> tuple[int, int] | None:
+        """Drag origin→target to merge two gauge cards; scan copy lifts GROUND so merges are visible.
+
+        Prefer the rightmost merge: maximize target index b, then origin a (lexicographic on (b, a)).
+        """
+        n = len(hand_of_cards)
+        if n < 2:
+            return None
+        scan = deepcopy(hand_of_cards)
+        for card in scan:
+            if self._card_matches_any(card, GAUGE_REMOVAL_TEMPLATES) and card.card_type == CardTypes.GROUND:
+                card.card_type = CardTypes.ATTACK
+        best: tuple[int, int] | None = None
+        for a in range(n - 1):
+            for b in range(a + 1, n):
+                if not self._card_matches_any(scan[a], GAUGE_REMOVAL_TEMPLATES):
+                    continue
+                if not self._card_matches_any(scan[b], GAUGE_REMOVAL_TEMPLATES):
+                    continue
+                if not determine_card_merge(scan[a], scan[b]):
+                    continue
+                if best is None or (b, a) > (best[1], best[0]):
+                    best = (a, b)
+        if best is not None:
+            print(f"Dragging gauge merge {best[0]} → {best[1]} (insufficient gold)")
+        return best
 
     def _card_matches_any(self, card: Card, template_names: Sequence[str]) -> bool:
         if card.card_image is None:

@@ -64,11 +64,19 @@ class DogsFighter(IFighter):
         elif self._try_enter_my_turn(screenshot):
             pass
 
+    def _check_disabled_hand(self) -> bool:
+        """Subclasses (e.g. DogsFloor4Fighter) may override to match bird-style full-hand disable detection."""
+        return False
+
     def _try_enter_my_turn(self, screenshot) -> bool:
         """If empty card slots are visible, enter MY_TURN. Subclasses may override (e.g. Floor 4 first turn)."""
         available_card_slots = DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)
         if available_card_slots <= 0:
             return False
+        if available_card_slots >= 3 and self._check_disabled_hand():
+            print("Our hand is fully disabled, let's restart the fight!")
+            self.current_state = FightingStates.EXIT_FIGHT
+            return True
         self.available_card_slots = available_card_slots
         print(f"MY TURN, selecting {available_card_slots} cards...")
         self.current_state = FightingStates.MY_TURN
@@ -185,6 +193,19 @@ class DogsFighter(IFighter):
             # Reset the current phase
             IFighter.current_phase = None
 
+    def exit_fight_state(self):
+        """Manually finish the fight when the hand is fully disabled (same flow as BirdFighter)."""
+        screenshot, window_location = capture_window()
+
+        if find(vio.ok_main_button, screenshot):
+            self.current_state = FightingStates.DEFEAT
+            return
+
+        if find_and_click(vio.forfeit, screenshot, window_location):
+            return
+
+        find_and_click(vio.pause, screenshot, window_location)
+
     @IFighter.run_wrapper
     def run(self, floor=1):
 
@@ -204,6 +225,9 @@ class DogsFighter(IFighter):
 
             elif self.current_state == FightingStates.DEFEAT:
                 self.defeat_state()
+
+            elif self.current_state == FightingStates.EXIT_FIGHT:
+                self.exit_fight_state()
 
             if self.exit_thread:
                 print("Closing Fighter thread!")
