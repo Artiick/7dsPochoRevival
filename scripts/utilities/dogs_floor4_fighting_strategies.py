@@ -92,8 +92,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     def get_next_card_index_phase1(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
         self._maybe_reset("phase_1")
 
-        print("Do we have Lillia in the team?", type(self).lillia_in_team)
-
         # Phase 1: First turn, play a sequence of cards
         if IBattleStrategy.fight_turn == 0:
             stance_already_picked = bool(self._matching_card_ids(picked_cards, ("thonar_stance",)))
