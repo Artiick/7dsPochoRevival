@@ -149,6 +149,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         played_nas_stuns = bool(
             self._matching_card_ids(picked_cards, ("nasi_stun",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
         )
+        # If we still have no nasi_ult in hand (has_nasiens_ult was false at start of this pick) and we are on
+        # the 3rd+ card of the turn, try to reshuffle: move the first non-GROUND Nasiens card one slot right.
+        if card_turn == 0 and not has_nasiens_ult and len(nasiens_ids) > 0:
+            print("Moving Nasiens card to get ult...")
+            return [nasiens_ids[-1], nasiens_ids[-1] + 1]
+
         if len(nas_stuns) > 0 and not played_nas_stuns:
             return nas_stuns[-1]
 
@@ -163,15 +169,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if self._card_matches_any(hand_of_cards[i], ("nasi_ult",)):
                 print("Disablnig Nasiens ult!")
                 hand_of_cards[i].card_type = CardTypes.DISABLED
-
-        # If we still have no nasi_ult in hand (has_nasiens_ult was false at start of this pick) and we are on
-        # the 3rd+ card of the turn, try to reshuffle: move the first non-GROUND Nasiens card one slot right.
-        if card_turn >= 3 and not has_nasiens_ult:
-            i = next((j for j in nasiens_ids if hand_of_cards[j].card_type != CardTypes.GROUND), None)
-            if i is not None:
-                print("Moving Nasiens card to get ult...")
-                return [i, i + 1]
-            print("Can't move a Nasiens card to get ult...")
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
