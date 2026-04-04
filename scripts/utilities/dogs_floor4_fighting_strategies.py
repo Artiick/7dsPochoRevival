@@ -199,7 +199,8 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # At this point, let's see if we can remove the damage cap thingy...
         screenshot, window_location = capture_window()
         # Safety net:
-        has_damage_cap = not DogsFloor4BattleStrategy.removed_damage_cap
+        has_damage_cap = not DogsFloor4BattleStrategy.removed_damage_cap or find(vio.dogs_damage_cap, screenshot)
+        DogsFloor4BattleStrategy.removed_damage_cap = not has_damage_cap
         if has_damage_cap:
             # First, check if we've played enough
             played_thonar_ids = self._tr(picked_cards, ("thonar_gauge",), CardRanks.GOLD)
