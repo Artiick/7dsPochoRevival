@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from typing import Final
 
+import numpy as np
 import utilities.vision_images as vio
 from utilities.card_data import Card, CardRanks, CardTypes
 from utilities.coordinates import Coordinates
@@ -60,19 +61,18 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         ## Common logic -- Protect gauge removal cards at all costs (non-Lillia teams only)!
 
         if not type(self).lillia_in_team:
-            # If playing the card at i would bring i-1 and i+1 together and they would merge, and either
-            # neighbor is Thonar gauge, mark the middle as GROUND so we do not trigger that merge.
-            # (Run before blanket GROUND below so determine_card_merge still sees real types.)
-            for i in range(1, len(hand_of_cards) - 1):
-                left, right = hand_of_cards[i - 1], hand_of_cards[i + 1]
-                if determine_card_merge(left, right) and (
-                    self._card_matches_any(left, ("thonar_gauge",)) or self._card_matches_any(right, ("thonar_gauge",))
-                ):
-                    hand_of_cards[i].card_type = CardTypes.GROUND
-
-            # Never select Thonar gauge removal cards directly
-            for i, card in enumerate(hand_of_cards):
-                if self._card_matches_any(card, ("thonar_gauge",)):
+            # Mark Thonar gauge cards GROUND so Smarter skips them unless phase logic explicitly plays them.
+            ids = [i for i, c in enumerate(hand_of_cards) if self._card_matches_any(c, ("thonar_gauge",))]
+            if ids:
+                n_gold = sum(1 for i in ids if hand_of_cards[i].card_rank == CardRanks.GOLD)
+                if n_gold <= 1:
+                    # Single (or no) gold: reserve every Thonar gauge — nothing safe to leave playable.
+                    to_ground = ids
+                else:
+                    # Two+ golds: reserve only the two best ranks if that pair is both gold; else reserve all.
+                    top2 = sorted(ids, key=lambda j: (hand_of_cards[j].card_rank.value, j), reverse=True)[:2]
+                    to_ground = top2 if all(hand_of_cards[j].card_rank == CardRanks.GOLD for j in top2) else ids
+                for i in to_ground:
                     hand_of_cards[i].card_type = CardTypes.GROUND
 
         else:
@@ -147,6 +147,13 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         has_nasiens_ult = any(self._card_matches_any(hand_of_cards[i], ("nasi_ult",)) for i in nasiens_ids)
         escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
 
+        nas_stuns = self._matching_card_ids(hand_of_cards, ("nasi_stun",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
+        played_nas_stuns = bool(
+            self._matching_card_ids(picked_cards, ("nasi_stun",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
+        )
+        if len(nas_stuns) > 0 and not played_nas_stuns:
+            return nas_stuns[-1]
+
         # Pick at most one Escalin card -- Only in non-Lillia teams, because Lillia's damage is a**
         if not type(self).lillia_in_team and bool(self._matching_card_ids(picked_cards, ESCALIN_TEMPLATES)):
             for i in escalin_ids:
@@ -188,6 +195,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     print("Disabling Escalin cards")
                     hand_of_cards[i].card_type = CardTypes.DISABLED
 
+            drag = self._best_gauge_merge_drag_indices(hand_of_cards)
+            if drag is not None:
+                return drag
+
             return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
         # At this point, let's see if we can remove the damage cap thingy...
@@ -196,17 +207,17 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         has_damage_cap = not DogsFloor4BattleStrategy.removed_damage_cap
         if has_damage_cap:
             # First, check if we've played enough
-            played_thonar_ids = self._matching_card_ids(picked_cards, ("thonar_gauge",), ranks=(CardRanks.GOLD,))
-            played_lillia_ids = self._matching_card_ids(picked_cards, ("lillia_aoe",), ranks=(CardRanks.GOLD,))
-            if len(played_thonar_ids) >= 2 or len(played_lillia_ids) >= 1:
+            played_thonar_ids = self._tr(picked_cards, ("thonar_gauge",), CardRanks.GOLD)
+            played_lillia_ids = self._tr(picked_cards, ("lillia_aoe",), CardRanks.GOLD)
+            if played_thonar_ids.size >= 2 or played_lillia_ids.size >= 1:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
                 return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
-            thonar_gauge_ids = self._matching_card_ids(hand_of_cards, ("thonar_gauge",), ranks=(CardRanks.GOLD,))
-            lillia_aoe_ids = self._matching_card_ids(hand_of_cards, ("lillia_aoe",), ranks=(CardRanks.GOLD,))
-            print("These many thonar and lillia cards available:", len(thonar_gauge_ids), len(lillia_aoe_ids))
+            thonar_gauge_ids = self._tr(hand_of_cards, ("thonar_gauge",), CardRanks.GOLD)
+            lillia_aoe_ids = self._tr(hand_of_cards, ("lillia_aoe",), CardRanks.GOLD)
+            print("These many thonar and lillia cards available:", thonar_gauge_ids.size, lillia_aoe_ids.size)
 
-            if not lillia_aoe_ids and len(thonar_gauge_ids) < 2:
+            if lillia_aoe_ids.size == 0 and thonar_gauge_ids.size < 2:
                 drag = self._best_gauge_merge_drag_indices(hand_of_cards)
                 if drag is not None:
                     return drag
@@ -217,21 +228,24 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
                 print("Phase 3: activating Escalin talent!")
                 time.sleep(2.5)
-                DogsFloor4BattleStrategy.removed_damage_cap = True
 
-            if len(played_thonar_ids) == 1:
+            if played_thonar_ids.size == 1:
                 # Gotta click light dog after we've played the first remove gauge card
+                print("Clicking light dog after playing the first remove gauge card!")
                 click_im(Coordinates.get_coordinates("light_dog"), window_location)
+                time.sleep(1)
 
-            if len(lillia_aoe_ids):
+            if lillia_aoe_ids.size:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
-                return lillia_aoe_ids[-1]
+                print("Playing a GOLD Lillia card!")
+                return int(lillia_aoe_ids[-1])
 
-            if len(played_thonar_ids) <= 1:
+            if played_thonar_ids.size <= 1:
                 # Play Thonar's gauge cards!
-                thonar_gauge_id = self._best_matching_card(hand_of_cards, ("thonar_gauge",), ranks=(CardRanks.GOLD,))
+                thonar_gauge_id = int(thonar_gauge_ids[-1]) if thonar_gauge_ids.size else -1
                 if thonar_gauge_id != -1:
-                    if len(played_thonar_ids) == 1:
+                    print("Playing a GOLD Thonar card!")
+                    if played_thonar_ids.size == 1:
                         DogsFloor4BattleStrategy.removed_damage_cap = True
                     return thonar_gauge_id
 
@@ -242,6 +256,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         else:
             # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
+            print("No more damage cap, let's go HAM!")
             escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
             roxy_ids = self._matching_card_ids(hand_of_cards, ROXY_TEMPLATES)
             if len(escalin_ids) > 0:
@@ -260,6 +275,11 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     ) -> int:
         matching_ids = self._matching_card_ids(hand_of_cards, template_names, ranks=ranks)
         return matching_ids[-1] if matching_ids else -1
+
+    def _tr(self, cards: list[Card], templates: Sequence[str], rank: CardRanks) -> np.ndarray:
+        """Indices where template matches and rank matches (ignores GROUND — for gauge bookkeeping)."""
+        r = np.array([c.card_rank.value for c in cards])
+        return np.where(np.array([self._card_matches_any(c, templates) for c in cards]) & (r == rank.value))[0]
 
     def _matching_card_ids(
         self,
