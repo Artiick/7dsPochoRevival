@@ -108,6 +108,10 @@ Tune your gear so you can guarantee that.<br>
 • Targets finishing <strong>Phase 1 in 1</strong> player turn; needs the CC/gear to support that opener.<br>
 • With whale mode <strong>off</strong>, expect <strong>Phase 1 in 3</strong> turns instead.</p>
     """,
+    "Dogs Floor 4": """
+<p><strong>Requirements:</strong><br>
+• Escalin, Lillia/Roxy(recommended), Nasiens, Thonar</p>
+    """,
     "Dogs Farmer": """
 <p><strong>Requirements:</strong><br>
 • Any team works</p>
@@ -187,6 +191,7 @@ FARMER_IMAGES = {
     "Deer Farmer": "deer_farmer.png",
     "Deer Floor 4": "deer_floor_4.png",
     "Dogs Farmer": "dogs_farmer.jpeg",
+    "Dogs Floor 4": "dogs_floor_4.jpeg",
     "Tower Trials": "tower_trials_farmer.jpg",
     "Snake Farmer": "snake_farmer.png",
     "Rat Farmer": "rat_farmer.jpg",
@@ -272,6 +277,14 @@ FARMERS = [
             {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
             {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
             {"name": "--whale", "label": "Whale mode", "type": "checkbox", "default": False},
+        ],
+    },
+    {
+        "name": "Dogs Floor 4",
+        "script": "DogsFloor4Farmer.py",
+        "args": [
+            {"name": "--clears", "label": "Clears", "type": "text", "default": "inf"},
+            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
     },
     {
@@ -379,6 +392,7 @@ PASSWORD_CLI_SCRIPTS = frozenset(
         "DeerFarmer.py",
         "DeerFloor4Farmer.py",
         "DogsFarmer.py",
+        "DogsFloor4Farmer.py",
         "DemonFarmer.py",
         "GuildBossFarmer.py",
         "RatFarmer.py",
