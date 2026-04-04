@@ -217,7 +217,8 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             lillia_aoe_ids = self._tr(hand_of_cards, ("lillia_aoe",), CardRanks.GOLD)
             print("These many thonar and lillia cards available:", thonar_gauge_ids.size, lillia_aoe_ids.size)
 
-            if lillia_aoe_ids.size == 0 and thonar_gauge_ids.size < 2:
+            # Count GOLD thonar_gauge in hand plus already played this turn (picked_cards).
+            if lillia_aoe_ids.size == 0 and (played_thonar_ids.size + thonar_gauge_ids.size) < 2:
                 drag = self._best_gauge_merge_drag_indices(hand_of_cards)
                 if drag is not None:
                     return drag
