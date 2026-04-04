@@ -71,8 +71,6 @@ class IFighter(abc.ABC):
         with self._lock:
             print("Manually stopping the fighter thread.")
             self.exit_thread = True
-            # Reset the battle strategy turn
-            self.battle_strategy.reset_fight_turn()
 
     def play_cards(self, **kwargs):
         """Read the current hand of cards, and play them based on the available card slots."""
@@ -197,12 +195,12 @@ class IFighter(abc.ABC):
         """
 
         def wrapper_func(self: IFighter, *args, **kwargs):
-            # Call the original function
-            func(self, *args, **kwargs)
-
-            # Clean up the attributes by resetting them, in case the subclass instance is reused
-            print("Resetting fighter...")
-            self._reset_instance_variables()
+            try:
+                func(self, *args, **kwargs)
+            finally:
+                print("Resetting fighter...")
+                self.battle_strategy.reset_fight_turn()
+                self._reset_instance_variables()
 
         return wrapper_func
 

@@ -38,7 +38,7 @@ class IBattleStrategy(abc.ABC):
         IBattleStrategy._fight_turn += 1
 
     def reset_fight_turn(self):
-        """Reset the fight turn"""
+        """Reset IBattleStrategy._fight_turn. Normally IFighter.run_wrapper (finally); mid-fight resets are rare (e.g. Indura phase 3)."""
         IBattleStrategy._fight_turn = 0
 
     def pick_cards(self, picked_cards: list[Card] = None, num_units=4, **kwargs) -> tuple[list[Card], list[int]]:

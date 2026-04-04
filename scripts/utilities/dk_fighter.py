@@ -93,8 +93,6 @@ class DemonKingFighter(IFighter):
 
         with self._lock:
             self.exit_thread = True
-            # Reset the battle strategy turn
-            self.battle_strategy.reset_fight_turn()
 
         self.complete_callback(find(vio.victory, screenshot))
 
