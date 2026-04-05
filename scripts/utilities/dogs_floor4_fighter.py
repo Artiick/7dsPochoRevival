@@ -45,7 +45,12 @@ class DogsFloor4Fighter(DogsFighter):
         return entered
 
     def _maybe_increment_fight_turn_at_phase3_turn_start(self):
-        """Phase 3: advance ``fight_turn`` at turn start when opening slots >= 3 (first phase-3 turn becomes turn 1 at open); otherwise ``finish_turn`` increments."""
+        """Phase 3: on the first card pick of the player turn, maybe advance ``fight_turn`` (if opening slots >= 3).
+
+        Runs every MY_TURN loop tick before ``play_cards``; mid-turn ticks are skipped via ``picked_cards[0]``.
+        If we do not increment here, ``finish_turn`` increments instead. Opening slot count may be nudged up
+        from vision when it exceeds ``available_card_slots`` (same idea as ``play_cards``).
+        """
         if IFighter.current_phase != 3:
             DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start = False
             return
@@ -53,20 +58,13 @@ class DogsFloor4Fighter(DogsFighter):
         if DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start:
             return
 
+        if self.picked_cards[0].card_image is not None:
+            return
+
         screenshot, _ = capture_window()
         empty = DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)
         if empty > self.available_card_slots:
             self.available_card_slots = empty
-        # First pick of the turn only: empty-slot vision often under-counts vs MY_TURN entry.
-        # Without this, empty < available skips turn-start increment and fight_turn stays tied to defer.
-        if (
-            not DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start
-            and empty < self.available_card_slots
-            and self.picked_cards[0].card_image is None
-        ):
-            empty = self.available_card_slots
-        if empty != self.available_card_slots:
-            return
 
         if self.available_card_slots >= 3:
             self.battle_strategy.increment_fight_turn()
