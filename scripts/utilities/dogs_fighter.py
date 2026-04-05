@@ -51,7 +51,7 @@ class DogsFighter(IFighter):
         # To skip quickly to the rewards when the fight is done
         find_and_click(vio.creature_destroyed, screenshot, window_location)
 
-        if find(vio.defeat, screenshot):
+        if find(vio.defeat, screenshot) or find(vio.close, screenshot):
             # I may have lost though...
             print("I lost! :(")
             self.current_state = FightingStates.DEFEAT
@@ -185,6 +185,9 @@ class DogsFighter(IFighter):
         find_and_click(vio.daily_quest_info, screenshot, window_location)
 
         find_and_click(vio.ok_main_button, screenshot, window_location)
+
+        # In case we see a "close" button
+        find_and_click(vio.close, screenshot, window_location)
 
         if find(vio.db_loading_screen, screenshot):
             # We're going back to the main bird menu, let's end this thread
