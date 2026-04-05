@@ -171,15 +171,13 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         for i in nasiens_ids:
             if self._card_matches_any(hand_of_cards[i], ("nasi_ult",)):
                 print("Disablnig Nasiens ult!")
-                hand_of_cards[i].card_type = CardTypes.DISABLED
+                hand_of_cards[i].card_type = CardTypes.GROUND
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
     def get_next_card_index_phase3(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
         """Important: In phase 3, fight turns start at 1!"""
         self._maybe_reset("phase_3")
-
-        print("We're in turn", IBattleStrategy.fight_turn)
 
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
@@ -189,9 +187,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # If fight turn is <=2, just waste cards and disable Escalin cards
         if IBattleStrategy.fight_turn <= 2:
             for i in range(len(hand_of_cards)):
-                if self._card_matches_any(hand_of_cards[i], ESCALIN_TEMPLATES):
+                if self._card_matches_any(hand_of_cards[i], ("escalin_st", "escalin_aoe")):
                     print("Disabling Escalin cards")
                     hand_of_cards[i].card_type = CardTypes.DISABLED
+                elif self._card_matches_any(hand_of_cards[i], ("escalin_ult",)):
+                    print("Disabling Escalin ult")
+                    hand_of_cards[i].card_type = CardTypes.GROUND
 
             drag = self._best_gauge_merge_drag_indices(hand_of_cards)
             if drag is not None:
@@ -248,6 +249,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 if thonar_gauge_id != -1:
                     print("Playing a GOLD Thonar card!")
                     if played_thonar_ids.size == 1:
+                        print("Let's try not to play HAM cards yet...")
                         DogsFloor4BattleStrategy.removed_damage_cap = True
                         DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = (
                             IBattleStrategy.fight_turn
@@ -262,6 +264,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         else:
             # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
             if IBattleStrategy.fight_turn <= DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn:
+                print("We can't play HAM cards yet!")
                 return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
             print("No more damage cap, let's go HAM!")
             escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
