@@ -137,10 +137,13 @@ class SmarterBattleStrategy(IBattleStrategy):
 
     @staticmethod
     def _rightmost_playable_fallback_index(hand_of_cards: list[Card]) -> int:
-        """Rightmost slot that is not GROUND (strategy masks) or NONE (empty). If none, -1 for legacy last-slot behavior."""
+        """Prefer rightmost non-GROUND/NONE/DISABLED; if only DISABLED remains, use rightmost DISABLED."""
         for i in range(len(hand_of_cards) - 1, -1, -1):
             t = hand_of_cards[i].card_type
-            if t not in (CardTypes.GROUND, CardTypes.NONE):
+            if t not in (CardTypes.GROUND, CardTypes.NONE, CardTypes.DISABLED):
+                return i
+        for i in range(len(hand_of_cards) - 1, -1, -1):
+            if hand_of_cards[i].card_type == CardTypes.DISABLED:
                 return i
         return -1
 
@@ -204,7 +207,8 @@ class SmarterBattleStrategy(IBattleStrategy):
                 return disabled_ids[-1]
 
         print(
-            "We don't meet any of the previous criteria, defaulting to the rightmost index " "that isn't GROUND or NONE"
+            "We don't meet any of the previous criteria, defaulting to the rightmost index "
+            "that isn't GROUND, NONE, or DISABLED (else rightmost DISABLED)"
         )
         return cls._rightmost_playable_fallback_index(hand_of_cards)
 
