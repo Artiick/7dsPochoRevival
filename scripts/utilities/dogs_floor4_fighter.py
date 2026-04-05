@@ -57,6 +57,14 @@ class DogsFloor4Fighter(DogsFighter):
         empty = DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)
         if empty > self.available_card_slots:
             self.available_card_slots = empty
+        # First pick of the turn only: empty-slot vision often under-counts vs MY_TURN entry.
+        # Without this, empty < available skips turn-start increment and fight_turn stays tied to defer.
+        if (
+            not DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start
+            and empty < self.available_card_slots
+            and self.picked_cards[0].card_image is None
+        ):
+            empty = self.available_card_slots
         if empty != self.available_card_slots:
             return
 

@@ -35,14 +35,14 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     roxy_in_team = False
 
     removed_damage_cap = False
-    # HAM (Escalin/Roxy) only after fight_turn advances past the turn where cap removal was committed.
-    _defer_escalin_roxy_ham_until_after_fight_turn = -1
+    # Minimum fight_turn index where Escalin/Roxy HAM is allowed; block while fight_turn < this (-1 = unset).
+    _defer_ham_cards_until_after_fight_turn = -1
 
     def _initialize_static_variables(self):
         DogsFloor4BattleStrategy._phase_initialized = set()
         DogsFloor4BattleStrategy._last_phase_seen = None
         DogsFloor4BattleStrategy.removed_damage_cap = False
-        DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = -1
+        DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = -1
 
     def reset_run_state(self, *, lillia_in_team=False, roxy_in_team=False):
         """Called from DogsFloor4Fighter.run before the fight loop."""
@@ -193,6 +193,8 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         """Important: In phase 3, fight turns start at 1!"""
         self._maybe_reset("phase_3")
 
+        print(f"Phase 3: fight turn {IBattleStrategy.fight_turn}")
+
         # If we have Lillia in the team, let's set to GROUND all ST gauge cards
         if type(self).lillia_in_team:
             st_gauge_ids = [
@@ -203,7 +205,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
-        if len(nasiens_ult_id) > 0:
+        if len(nasiens_ult_id) > 0 and not DogsFloor4BattleStrategy.removed_damage_cap:
             return nasiens_ult_id[-1]
 
         # Merge ST gauge cards if possible
@@ -217,15 +219,16 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # At this point, let's see if we can remove the damage cap thingy...
         screenshot, window_location = capture_window()
         # Safety net:
-        has_damage_cap = not DogsFloor4BattleStrategy.removed_damage_cap or find(vio.dogs_damage_cap, screenshot)
+        has_damage_cap = not DogsFloor4BattleStrategy.removed_damage_cap
         # DogsFloor4BattleStrategy.removed_damage_cap = not has_damage_cap
+        print("Do we still have a damage cap?", has_damage_cap, " Do we see it?", find(vio.dogs_damage_cap, screenshot))
         if has_damage_cap:
             # First, check if we've played enough
             played_st_gauge_ids = self._tr(picked_cards, ST_GAUGE_TEMPLATES, CardRanks.GOLD)
             played_lillia_ids = self._tr(picked_cards, ("lillia_aoe",), CardRanks.GOLD)
             if played_st_gauge_ids.size >= 2 or played_lillia_ids.size >= 1:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
-                DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = IBattleStrategy.fight_turn
+                DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = IBattleStrategy.fight_turn + 1
                 return self._smarter_phase3(hand_of_cards, picked_cards)
 
             st_gauge_ids = self._tr(hand_of_cards, ST_GAUGE_TEMPLATES, CardRanks.GOLD)
@@ -257,7 +260,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
             if lillia_aoe_ids.size:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
-                DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = IBattleStrategy.fight_turn
+                DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = IBattleStrategy.fight_turn + 1
                 print("Playing a GOLD Lillia card!")
                 return int(lillia_aoe_ids[-1])
 
@@ -267,22 +270,29 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 if st_gauge_pick_id != -1:
                     print("Playing a GOLD ST gauge card!")
                     if played_st_gauge_ids.size == 1:
-                        print("Let's try not to play HAM cards yet...")
                         DogsFloor4BattleStrategy.removed_damage_cap = True
-                        DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = (
-                            IBattleStrategy.fight_turn
+                        DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = (
+                            IBattleStrategy.fight_turn + 1
+                        )
+                        print(
+                            f"Damage cap removed on fight turn {IBattleStrategy.fight_turn}! "
+                            f"HAM allowed starting fight turn "
+                            f"{DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn}."
                         )
                     return st_gauge_pick_id
 
+        else:
             # Re-enable Lillia / ST gauge cards, we can/should play them here -- Maybe not needed, but just in case
             for i in range(len(hand_of_cards)):
                 if self._card_matches_any(hand_of_cards[i], GAUGE_REMOVAL_TEMPLATES):
                     hand_of_cards[i].card_type = CardTypes.ATTACK
-
-        else:
             # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
-            if IBattleStrategy.fight_turn <= DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn:
-                print("We can't play HAM cards yet!")
+            if IBattleStrategy.fight_turn < DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn:
+                print(
+                    f"We can't play HAM cards yet! fight_turn={IBattleStrategy.fight_turn}, "
+                    f"HAM allowed when fight_turn >= "
+                    f"{DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn}."
+                )
                 return self._smarter_phase3(hand_of_cards, picked_cards)
             print("No more damage cap, let's go HAM!")
             escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
