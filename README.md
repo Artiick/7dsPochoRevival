@@ -67,9 +67,9 @@ Now, simply via the `Update` button in the "About" tab of the GUI!
 
 You can PAUSE/RESUME the bot at any time with the corresponding button.
 
-### Game password and re-login (GUI)
+### Game password (optional)
 
-The **Settings** tab stores **`game_password`** in `scripts/config/config.yaml` (plaintext). It is used when the game shows the login screen after a disconnect or logout so the bot can sign back in. Password-capable farmers receive `--password` from Settings (in-memory field first, then saved `game_password` in the file). **`minutes_to_wait_before_login`** configures how long to wait after logout before attempting login again (same setting the farmers read at process start). There is **no per-farmer password field** in the GUI. **Accounts Farmer** does not use `game_password` (it uses `config/accounts.yaml`). If `config.yaml` contains secrets, avoid committing it or use a private clone.
+If the game logs you out, put your password in **Settings** so the bot can sign back in; change how long it waits after logout there too if you need to. 
 
 ### Push Notifications
 The bot can send push notifications to your phone when it detects a stuck state, including a screenshot for quick diagnosis. Once the bot recovers, you get a recovery alert.
