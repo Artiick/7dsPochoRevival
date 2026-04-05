@@ -198,21 +198,13 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         if len(nasiens_ult_id) > 0:
             return nasiens_ult_id[-1]
 
-        # If fight turn is <=2, just waste cards and disable Escalin cards
+        # Merge ST gauge cards if possible
         if IBattleStrategy.fight_turn <= 2:
-            for i in range(len(hand_of_cards)):
-                if self._card_matches_any(hand_of_cards[i], ("escalin_st", "escalin_aoe")):
-                    print("Disabling Escalin cards")
-                    hand_of_cards[i].card_type = CardTypes.DISABLED
-                elif self._card_matches_any(hand_of_cards[i], ("escalin_ult",)):
-                    print("Disabling Escalin ult")
-                    hand_of_cards[i].card_type = CardTypes.GROUND
-
             drag = self._best_gauge_merge_drag_indices(hand_of_cards)
             if drag is not None:
                 return drag
 
-            return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
+            return self._smarter_phase3(hand_of_cards, picked_cards)
 
         # At this point, let's see if we can remove the damage cap thingy...
         screenshot, window_location = capture_window()
@@ -226,7 +218,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if played_st_gauge_ids.size >= 2 or played_lillia_ids.size >= 1:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
                 DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = IBattleStrategy.fight_turn
-                return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
+                return self._smarter_phase3(hand_of_cards, picked_cards)
 
             st_gauge_ids = self._tr(hand_of_cards, ST_GAUGE_TEMPLATES, CardRanks.GOLD)
             lillia_aoe_ids = self._tr(hand_of_cards, ("lillia_aoe",), CardRanks.GOLD)
@@ -242,7 +234,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 if drag is not None:
                     return drag
                 print("Not enough gold cards to remove gauges...")
-                return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
+                return self._smarter_phase3(hand_of_cards, picked_cards)
 
             # Let's play Escalin's talent and do the ult gauge removal
             if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
@@ -283,7 +275,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
             if IBattleStrategy.fight_turn <= DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn:
                 print("We can't play HAM cards yet!")
-                return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
+                return self._smarter_phase3(hand_of_cards, picked_cards)
             print("No more damage cap, let's go HAM!")
             escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
             roxy_ids = self._matching_card_ids(hand_of_cards, ROXY_TEMPLATES)
@@ -292,6 +284,17 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if len(roxy_ids) > 0:
                 return roxy_ids[-1]
 
+        return self._smarter_phase3(hand_of_cards, picked_cards)
+
+    def _smarter_phase3(self, hand_of_cards: list[Card], picked_cards: list[Card]) -> int:
+        """Hide Escalin from Smarter only when delegating; HAM still uses raw _matching_card_ids."""
+        for i in range(len(hand_of_cards)):
+            if self._card_matches_any(hand_of_cards[i], ("escalin_st", "escalin_aoe")):
+                print("Disabling Escalin cards")
+                hand_of_cards[i].card_type = CardTypes.DISABLED
+            elif self._card_matches_any(hand_of_cards[i], ("escalin_ult",)):
+                print("Disabling Escalin ult")
+                hand_of_cards[i].card_type = CardTypes.GROUND
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
     def _best_matching_card(
