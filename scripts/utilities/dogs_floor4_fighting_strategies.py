@@ -147,11 +147,28 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print("Playing escalin aoe")
                 return self._best_matching_card(hand_of_cards, ("escalin_aoe",))
 
-        # Let's disable Nasien's stance cancel card...
-        nasiens_stance_cancel_id = self._matching_card_ids(hand_of_cards, ("nasi_stun",))
-        if len(nasiens_stance_cancel_id) > 0 and IBattleStrategy.fight_turn == 1:
-            print("Disabling Nasiens stance cancel card...")
-            hand_of_cards[nasiens_stance_cancel_id[-1]].card_type = CardTypes.DISABLED
+        # fight_turn 1: with two Nasi stuns, burn filler (no Escalin/Roxy/stun); else legacy single-stun tuck.
+        if IBattleStrategy.fight_turn == 1:
+            nasiens_stance_cancel_id = self._matching_card_ids(hand_of_cards, ("nasi_stun",))
+            if len(nasiens_stance_cancel_id) >= 2:
+                print("Phase 1: two Nasi stuns — disabling Escalin, Roxy, and up to two stuns for this pick.")
+                for group in (
+                    self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES),
+                    self._matching_card_ids(hand_of_cards, ROXY_TEMPLATES),
+                ):
+                    for i in group:
+                        hand_of_cards[i].card_type = CardTypes.DISABLED
+                for i in nasiens_stance_cancel_id[-2:]:
+                    # Disabling 2 Nasiens cards
+                    hand_of_cards[i].card_type = CardTypes.DISABLED
+            elif nasiens_stance_cancel_id:
+                print("Disabling Nasiens stance cancel card...")
+                hand_of_cards[nasiens_stance_cancel_id[-1]].card_type = CardTypes.DISABLED
+
+        if IBattleStrategy.fight_turn == 3 and card_turn == 0:
+            nas_open = self._matching_card_ids(hand_of_cards, ("nasi_stun",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
+            if nas_open:
+                return nas_open[-1]
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 

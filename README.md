@@ -113,6 +113,7 @@ For detailed information on all the bots available, go to the [bots README file]
 - [X] Guild Boss farmer
 - [X] Farmer for Bird Floor 4.
 - [X] Farmer for Deer Floor 4.
+- [X] Farmer for Dogs Floor 4 (beta version).
 - [X] Farmer for floors 1-3 of Deer.
 - [X] Farmer for floors 1-3 of Dogs.
 - [X] Farmer for floors 1-3 of Snake.
