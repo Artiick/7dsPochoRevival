@@ -212,13 +212,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         print(f"Phase 3: fight turn {IBattleStrategy.fight_turn}")
 
-        # If we have Lillia in the team, let's set to GROUND all ST gauge cards
-        if type(self).lillia_in_team:
-            st_gauge_ids = [
-                i for i, card in enumerate(hand_of_cards) if self._card_matches_any(card, ST_GAUGE_TEMPLATES)
-            ]
-            for i in st_gauge_ids:
-                hand_of_cards[i].card_type = CardTypes.GROUND
+        # Let's set to GROUND all ST gauge cards
+        st_gauge_ids = [i for i, card in enumerate(hand_of_cards) if self._card_matches_any(card, ST_GAUGE_TEMPLATES)]
+        for i in st_gauge_ids:
+            hand_of_cards[i].card_type = CardTypes.GROUND
 
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
@@ -312,12 +309,16 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 )
                 return self._smarter_phase3(hand_of_cards, picked_cards)
             print("No more damage cap, let's go HAM!")
-            escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
-            roxy_ids = self._matching_card_ids(hand_of_cards, ROXY_TEMPLATES)
-            if len(escalin_ids) > 0:
-                return escalin_ids[-1]
-            if len(roxy_ids) > 0:
-                return roxy_ids[-1]
+            for templates in (
+                ("escalin_ult",),
+                ("escalin_aoe",),
+                ("escalin_st",),
+                ("roxy_st", "roxy_ult"),
+                ("roxy_aoe",),
+            ):
+                ids = self._matching_card_ids(hand_of_cards, templates)
+                if ids:
+                    return ids[-1]
 
         return self._smarter_phase3(hand_of_cards, picked_cards)
 
