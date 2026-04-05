@@ -20,7 +20,9 @@ ESCALIN_TEMPLATES: Final[tuple[str, ...]] = ("escalin_st", "escalin_aoe", "escal
 ROXY_TEMPLATES: Final[tuple[str, ...]] = ("roxy_st", "roxy_aoe", "roxy_ult")
 NASI_TEMPLATES: Final[tuple[str, ...]] = ("nasi_heal", "nasi_stun", "nasi_ult")
 THONAR_TEMPLATES: Final[tuple[str, ...]] = ("thonar_stance", "thonar_gauge", "thonar_ult")
-GAUGE_REMOVAL_TEMPLATES: Final[tuple[str, ...]] = ("thonar_gauge", "lillia_aoe")
+# Single-target gauge templates (thonar_gauge, cusack_gauge): same cap-removal / merge / GROUND rules as each other; Lillia AOE separate.
+ST_GAUGE_TEMPLATES: Final[tuple[str, ...]] = ("thonar_gauge", "cusack_gauge")
+GAUGE_REMOVAL_TEMPLATES: Final[tuple[str, ...]] = (*ST_GAUGE_TEMPLATES, "lillia_aoe")
 
 
 class DogsFloor4BattleStrategy(IBattleStrategy):
@@ -64,12 +66,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         ## Common logic -- Protect gauge removal cards at all costs (non-Lillia teams only)!
 
         if not type(self).lillia_in_team:
-            # Mark Thonar gauge cards GROUND so Smarter skips them unless phase logic explicitly plays them.
-            ids = [i for i, c in enumerate(hand_of_cards) if self._card_matches_any(c, ("thonar_gauge",))]
+            # Mark ST gauge cards GROUND so Smarter skips them unless phase logic explicitly plays them.
+            ids = [i for i, c in enumerate(hand_of_cards) if self._card_matches_any(c, ST_GAUGE_TEMPLATES)]
             if ids:
                 n_gold = sum(1 for i in ids if hand_of_cards[i].card_rank == CardRanks.GOLD)
                 if n_gold <= 1:
-                    # Single (or no) gold: reserve every Thonar gauge — nothing safe to leave playable.
+                    # Single (or no) gold: reserve every ST gauge — nothing safe to leave playable.
                     to_ground = ids
                 else:
                     # Two+ golds: reserve only the two best ranks if that pair is both gold; else reserve all.
@@ -97,15 +99,27 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         # Phase 1: First turn, play a sequence of cards
         if IBattleStrategy.fight_turn == 0:
+
+            # Let's start with Escalin's talent
+            screenshot, window_location = capture_window()
+            if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+                print("Phase 3: activating Escalin talent!")
+                time.sleep(2.5)
+
             stance_already_picked = bool(self._matching_card_ids(picked_cards, ("thonar_stance",)))
             if not stance_already_picked:
                 print("Playing thonar stance")
                 return self._best_matching_card(hand_of_cards, ("thonar_stance",))
 
-            thonar_gauge_id = self._best_matching_card(hand_of_cards, ("thonar_gauge",))
-            if type(self).lillia_in_team and thonar_gauge_id != -1:
-                print("Playing thonar gauge")
-                return thonar_gauge_id
+            st_gauge_id = self._best_matching_card(hand_of_cards, ST_GAUGE_TEMPLATES)
+            if type(self).lillia_in_team and st_gauge_id != -1:
+                print("Playing gold ST gauge")
+                return st_gauge_id
+
+            cusack_cleave_id = self._best_matching_card(hand_of_cards, ("cusack_cleave",))
+            if cusack_cleave_id != -1:
+                print("Playing cusack cleave")
+                return cusack_cleave_id
 
             lillia_st_already_picked = bool(self._matching_card_ids(picked_cards, ("lillia_st",)))
             if not lillia_st_already_picked:
@@ -207,19 +221,23 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # DogsFloor4BattleStrategy.removed_damage_cap = not has_damage_cap
         if has_damage_cap:
             # First, check if we've played enough
-            played_thonar_ids = self._tr(picked_cards, ("thonar_gauge",), CardRanks.GOLD)
+            played_st_gauge_ids = self._tr(picked_cards, ST_GAUGE_TEMPLATES, CardRanks.GOLD)
             played_lillia_ids = self._tr(picked_cards, ("lillia_aoe",), CardRanks.GOLD)
-            if played_thonar_ids.size >= 2 or played_lillia_ids.size >= 1:
+            if played_st_gauge_ids.size >= 2 or played_lillia_ids.size >= 1:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
                 DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = IBattleStrategy.fight_turn
                 return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
-            thonar_gauge_ids = self._tr(hand_of_cards, ("thonar_gauge",), CardRanks.GOLD)
+            st_gauge_ids = self._tr(hand_of_cards, ST_GAUGE_TEMPLATES, CardRanks.GOLD)
             lillia_aoe_ids = self._tr(hand_of_cards, ("lillia_aoe",), CardRanks.GOLD)
-            print("These many thonar and lillia cards available:", thonar_gauge_ids.size, lillia_aoe_ids.size)
+            print(
+                "These many gold ST gauge and lillia_aoe cards available:",
+                st_gauge_ids.size,
+                lillia_aoe_ids.size,
+            )
 
-            # Count GOLD thonar_gauge in hand plus already played this turn (picked_cards).
-            if lillia_aoe_ids.size == 0 and (played_thonar_ids.size + thonar_gauge_ids.size) < 2:
+            # Count GOLD ST gauge in hand plus already played this turn (picked_cards).
+            if lillia_aoe_ids.size == 0 and (played_st_gauge_ids.size + st_gauge_ids.size) < 2:
                 drag = self._best_gauge_merge_drag_indices(hand_of_cards)
                 if drag is not None:
                     return drag
@@ -231,7 +249,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print("Phase 3: activating Escalin talent!")
                 time.sleep(2.5)
 
-            if played_thonar_ids.size == 1:
+            if played_st_gauge_ids.size == 1:
                 # Gotta click light dog after we've played the first remove gauge card
                 print("Clicking light dog after playing the first remove gauge card!")
                 click_im(Coordinates.get_coordinates("light_dog"), window_location)
@@ -243,20 +261,20 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print("Playing a GOLD Lillia card!")
                 return int(lillia_aoe_ids[-1])
 
-            if played_thonar_ids.size <= 1:
-                # Play Thonar's gauge cards!
-                thonar_gauge_id = int(thonar_gauge_ids[-1]) if thonar_gauge_ids.size else -1
-                if thonar_gauge_id != -1:
-                    print("Playing a GOLD Thonar card!")
-                    if played_thonar_ids.size == 1:
+            if played_st_gauge_ids.size <= 1:
+                # Play gold ST gauge cards (two total to clear cap when no Lillia AOE).
+                st_gauge_pick_id = int(st_gauge_ids[-1]) if st_gauge_ids.size else -1
+                if st_gauge_pick_id != -1:
+                    print("Playing a GOLD ST gauge card!")
+                    if played_st_gauge_ids.size == 1:
                         print("Let's try not to play HAM cards yet...")
                         DogsFloor4BattleStrategy.removed_damage_cap = True
                         DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = (
                             IBattleStrategy.fight_turn
                         )
-                    return thonar_gauge_id
+                    return st_gauge_pick_id
 
-            # Re-enable Lillia/Thonar cards, we can/should play them here -- Maybe not needed, but just in case
+            # Re-enable Lillia / ST gauge cards, we can/should play them here -- Maybe not needed, but just in case
             for i in range(len(hand_of_cards)):
                 if self._card_matches_any(hand_of_cards[i], GAUGE_REMOVAL_TEMPLATES):
                     hand_of_cards[i].card_type = CardTypes.ATTACK
