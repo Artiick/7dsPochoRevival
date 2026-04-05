@@ -203,7 +203,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         screenshot, window_location = capture_window()
         # Safety net:
         has_damage_cap = not DogsFloor4BattleStrategy.removed_damage_cap or find(vio.dogs_damage_cap, screenshot)
-        DogsFloor4BattleStrategy.removed_damage_cap = not has_damage_cap
+        # DogsFloor4BattleStrategy.removed_damage_cap = not has_damage_cap
         if has_damage_cap:
             # First, check if we've played enough
             played_thonar_ids = self._tr(picked_cards, ("thonar_gauge",), CardRanks.GOLD)
@@ -249,7 +249,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     print("Playing a GOLD Thonar card!")
                     if played_thonar_ids.size == 1:
                         DogsFloor4BattleStrategy.removed_damage_cap = True
-                        DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = IBattleStrategy.fight_turn
+                        DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn = (
+                            IBattleStrategy.fight_turn
+                        )
                     return thonar_gauge_id
 
             # Re-enable Lillia/Thonar cards, we can/should play them here -- Maybe not needed, but just in case
@@ -259,10 +261,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         else:
             # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
-            if (
-                IBattleStrategy.fight_turn
-                <= DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn
-            ):
+            if IBattleStrategy.fight_turn <= DogsFloor4BattleStrategy._defer_escalin_roxy_ham_until_after_fight_turn:
                 return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
             print("No more damage cap, let's go HAM!")
             escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
