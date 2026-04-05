@@ -16,6 +16,8 @@ from utilities.utilities import (
     find_and_click,
 )
 
+from scripts.utilities.card_data import Card
+
 ESCALIN_TEMPLATES: Final[tuple[str, ...]] = ("escalin_st", "escalin_aoe", "escalin_ult")
 ROXY_TEMPLATES: Final[tuple[str, ...]] = ("roxy_st", "roxy_aoe", "roxy_ult")
 NASI_TEMPLATES: Final[tuple[str, ...]] = ("nasi_heal", "nasi_stun", "nasi_ult")
@@ -192,6 +194,14 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     def get_next_card_index_phase3(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
         """Important: In phase 3, fight turns start at 1!"""
         self._maybe_reset("phase_3")
+
+        # If we have Lillia in the team, let's set to GROUND all ST gauge cards
+        if type(self).lillia_in_team:
+            st_gauge_ids = [
+                i for i, card in enumerate(hand_of_cards) if self._card_matches_any(card, ST_GAUGE_TEMPLATES)
+            ]
+            for i in st_gauge_ids:
+                hand_of_cards[i].card_type = CardTypes.GROUND
 
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
