@@ -1,6 +1,6 @@
 import time
 from collections.abc import Sequence
-from copy import deepcopy
+from copy import copy, deepcopy
 from typing import Final
 
 import numpy as np
@@ -85,6 +85,24 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             lillia_aoe_ids = self._matching_card_ids(hand_of_cards, ("lillia_aoe",))
             if len(lillia_aoe_ids) > 0:
                 hand_of_cards[lillia_aoe_ids[-1]].card_type = CardTypes.GROUND
+
+        # # Disable any playable card between two ST gauges if playing it would merge those neighbors.
+        # for i in range(1, len(hand_of_cards) - 1):
+        #     mid = hand_of_cards[i]
+        #     if mid.card_type in (CardTypes.GROUND, CardTypes.DISABLED, CardTypes.NONE):
+        #         continue
+        #     L, R = hand_of_cards[i - 1], hand_of_cards[i + 1]
+        #     if not (
+        #         self._card_matches_any(L, ST_GAUGE_TEMPLATES)
+        #         and self._card_matches_any(R, ST_GAUGE_TEMPLATES)
+        #     ):
+        #         continue
+        #     a, b = copy(L), copy(R)
+        #     for c in (a, b):
+        #         if c.card_type == CardTypes.GROUND:
+        #             c.card_type = CardTypes.ATTACK
+        #     if determine_card_merge(a, b):
+        #         mid.card_type = CardTypes.DISABLED
 
         # Phase-specify logic here
 
@@ -192,11 +210,11 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         if len(nas_stuns) > 0 and not played_nas_stuns:
             return nas_stuns[-1]
 
-        # Pick at most one Escalin card -- Only in non-Lillia teams, because Lillia's damage is a**
-        if not type(self).lillia_in_team and bool(self._matching_card_ids(picked_cards, ESCALIN_TEMPLATES)):
-            for i in escalin_ids:
-                print("Disabling Escalin cards")
-                hand_of_cards[i].card_type = CardTypes.DISABLED
+        # # Pick at most one Escalin card -- Only in non-Lillia teams, because Lillia's damage is a**
+        # if not type(self).lillia_in_team and bool(self._matching_card_ids(picked_cards, ESCALIN_TEMPLATES)):
+        #     for i in escalin_ids:
+        #         print("Disabling Escalin cards")
+        #         hand_of_cards[i].card_type = CardTypes.DISABLED
 
         # Do not play Nasiens ult: mark it GROUND so SmarterBattleStrategy skips it (same idea as Escalin above).
         for i in nasiens_ids:
