@@ -222,6 +222,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print("Disablnig Nasiens ult!")
                 hand_of_cards[i].card_type = CardTypes.GROUND
 
+        # Phase 2: Tuck one SILVER/GOLD roxy_st so Smarter skips it (same pattern as _smarter_phase3).
+        if type(self).roxy_in_team:
+            roxy_st_saveable = self._tr(hand_of_cards, ("roxy_st",), (CardRanks.SILVER, CardRanks.GOLD))
+            if roxy_st_saveable.size > 0:
+                hand_of_cards[int(roxy_st_saveable[-1])].card_type = CardTypes.GROUND
+
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
     def get_next_card_index_phase3(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
@@ -235,6 +241,18 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         for i in st_gauge_ids:
             hand_of_cards[i].card_type = CardTypes.GROUND
 
+        # Pre-cap Roxy: BRONZE roxy_st merge when hand has no SILVER/GOLD roxy_st. SILVER/GOLD tuck for Smarter is in _smarter_phase3.
+        if type(self).roxy_in_team and not DogsFloor4BattleStrategy.removed_damage_cap:
+            if self._tr(hand_of_cards, ("roxy_st",), (CardRanks.SILVER, CardRanks.GOLD)).size == 0:
+                drag = self._best_merge_drag_indices(
+                    hand_of_cards,
+                    ("roxy_st",),
+                    rank=CardRanks.BRONZE,
+                    log_label="roxy_st BRONZE merge",
+                )
+                if drag is not None:
+                    return drag
+
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
         if len(nasiens_ult_id) > 0 and not DogsFloor4BattleStrategy.removed_damage_cap:
@@ -242,7 +260,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         # Merge ST gauge cards if possible
         if IBattleStrategy.fight_turn <= 2:
-            drag = self._best_gauge_merge_drag_indices(hand_of_cards)
+            drag = self._best_merge_drag_indices(
+                hand_of_cards, GAUGE_REMOVAL_TEMPLATES, log_label="gauge merge (insufficient gold)"
+            )
             if drag is not None:
                 return drag
 
@@ -256,15 +276,15 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         print("Do we still have a damage cap?", has_damage_cap, " Do we see it?", find(vio.dogs_damage_cap, screenshot))
         if has_damage_cap:
             # First, check if we've played enough
-            played_st_gauge_ids = self._tr(picked_cards, ST_GAUGE_TEMPLATES, CardRanks.GOLD)
-            played_lillia_ids = self._tr(picked_cards, ("lillia_aoe",), CardRanks.GOLD)
+            played_st_gauge_ids = self._tr(picked_cards, ST_GAUGE_TEMPLATES, (CardRanks.GOLD,))
+            played_lillia_ids = self._tr(picked_cards, ("lillia_aoe",), (CardRanks.GOLD,))
             if played_st_gauge_ids.size >= 2 or played_lillia_ids.size >= 1:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
                 DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = IBattleStrategy.fight_turn + 1
                 return self._smarter_phase3(hand_of_cards, picked_cards)
 
-            st_gauge_ids = self._tr(hand_of_cards, ST_GAUGE_TEMPLATES, CardRanks.GOLD)
-            lillia_aoe_ids = self._tr(hand_of_cards, ("lillia_aoe",), CardRanks.GOLD)
+            st_gauge_ids = self._tr(hand_of_cards, ST_GAUGE_TEMPLATES, (CardRanks.GOLD,))
+            lillia_aoe_ids = self._tr(hand_of_cards, ("lillia_aoe",), (CardRanks.GOLD,))
             print(
                 "These many gold ST gauge and lillia_aoe cards available:",
                 st_gauge_ids.size,
@@ -273,14 +293,32 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
             # Count GOLD ST gauge in hand plus already played this turn (picked_cards).
             if lillia_aoe_ids.size == 0 and (played_st_gauge_ids.size + st_gauge_ids.size) < 2:
-                drag = self._best_gauge_merge_drag_indices(hand_of_cards)
+                drag = self._best_merge_drag_indices(
+                    hand_of_cards, GAUGE_REMOVAL_TEMPLATES, log_label="gauge merge (insufficient gold)"
+                )
                 if drag is not None:
                     return drag
                 print("Not enough gold cards to remove gauges...")
+                print(f"{played_st_gauge_ids.size} GOLD played and {st_gauge_ids.size} GOLD in hand.")
                 return self._smarter_phase3(hand_of_cards, picked_cards)
 
-            # Let's play Escalin's talent and do the ult gauge removal
-            if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+            # Escalin talent (gauge removal): Roxy — play SILVER/GOLD roxy_st if playable; else Nasi ult if SILVER/GOLD roxy_st is DISABLED; else talent.
+            played_roxy_st_ids = self._tr(picked_cards, ("roxy_st",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
+            if type(self).roxy_in_team and not len(played_roxy_st_ids):
+                roxy_st_sg_ranks = (CardRanks.SILVER, CardRanks.GOLD)
+                playable_roxy_st = self._matching_card_ids(hand_of_cards, ("roxy_st",), ranks=roxy_st_sg_ranks)
+                if playable_roxy_st:
+                    print("Phase 3: playing SILVER/GOLD roxy_st before Escalin talent")
+                    return playable_roxy_st[-1]
+                roxy_st_idx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_sg_ranks)
+                nasiens_ult_here = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
+                if nasiens_ult_here and any(hand_of_cards[int(i)].card_type == CardTypes.DISABLED for i in roxy_st_idx):
+                    print("Phase 3: Nasi ult to unlock DISABLED SILVER/GOLD roxy_st")
+                    return nasiens_ult_here[-1]
+
+            if not len(played_roxy_st_ids) and find_and_click(
+                vio.talent_escalin, screenshot, window_location, threshold=0.6
+            ):
                 print("Phase 3: activating Escalin talent!")
                 time.sleep(2.5)
 
@@ -314,6 +352,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     return st_gauge_pick_id
 
         else:
+
+            # NOTE: Let's *not* play Escalin talent here, it may remove Nasiens buffs!
+
             # Re-enable Lillia / ST gauge cards, we can/should play them here -- Maybe not needed, but just in case
             for i in range(len(hand_of_cards)):
                 if self._card_matches_any(hand_of_cards[i], GAUGE_REMOVAL_TEMPLATES):
@@ -341,7 +382,15 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         return self._smarter_phase3(hand_of_cards, picked_cards)
 
     def _smarter_phase3(self, hand_of_cards: list[Card], picked_cards: list[Card]) -> int:
-        """Hide Escalin from Smarter only when delegating; HAM still uses raw _matching_card_ids."""
+        """Adjust the hand, then ask Smarter for the next card index.
+
+        Hides Escalin cards from the default strategy (stance/AOE disabled, ult
+        marked as ground). If the damage cap is still active and Roxy is on the
+        team, also marks one SILVER or GOLD Roxy ST card as ground so it is not
+        chosen until explicit phase-3 logic plays it.
+        """
+        roxy_st_hi = (CardRanks.SILVER, CardRanks.GOLD)
+        # Keep Escalin off Smarter's pick list for this delegation.
         for i in range(len(hand_of_cards)):
             if self._card_matches_any(hand_of_cards[i], ("escalin_st", "escalin_aoe")):
                 print("Disabling Escalin cards")
@@ -349,6 +398,16 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             elif self._card_matches_any(hand_of_cards[i], ("escalin_ult",)):
                 print("Disabling Escalin ult")
                 hand_of_cards[i].card_type = CardTypes.GROUND
+        # Pre-cap: hide one high-rank Roxy ST from Smarter until phase-3 logic plays it.
+        if type(self).roxy_in_team and not DogsFloor4BattleStrategy.removed_damage_cap:
+            roxy_st_saveable = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
+            if roxy_st_saveable.size > 0:
+                hand_of_cards[int(roxy_st_saveable[-1])].card_type = CardTypes.GROUND
+        # All-GROUND confuses downstream; unstick one SILVER/GOLD roxy_st to DISABLED if needed.
+        if hand_of_cards and all(c.card_type == CardTypes.GROUND for c in hand_of_cards):
+            rx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
+            if rx.size > 0:
+                hand_of_cards[int(rx[-1])].card_type = CardTypes.DISABLED
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
     def _best_matching_card(
@@ -361,10 +420,14 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         matching_ids = self._matching_card_ids(hand_of_cards, template_names, ranks=ranks)
         return matching_ids[-1] if matching_ids else -1
 
-    def _tr(self, cards: list[Card], templates: Sequence[str], rank: CardRanks) -> np.ndarray:
-        """Indices where template matches and rank matches (ignores GROUND — for gauge bookkeeping)."""
+    def _tr(self, cards: list[Card], templates: Sequence[str], ranks: Sequence[CardRanks]) -> np.ndarray:
+        """Indices where template matches and card rank is in ``ranks`` (any ``card_type``)."""
+        if not ranks:
+            return np.array([], dtype=np.intp)
         r = np.array([c.card_rank.value for c in cards])
-        return np.where(np.array([self._card_matches_any(c, templates) for c in cards]) & (r == rank.value))[0]
+        allowed = np.array([x.value for x in ranks])
+        template_ok = np.array([self._card_matches_any(c, templates) for c in cards])
+        return np.where(template_ok & np.isin(r, allowed))[0]
 
     def _matching_card_ids(
         self,
@@ -385,8 +448,17 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             key=lambda idx: (hand_of_cards[idx].card_rank.value, idx),
         )
 
-    def _best_gauge_merge_drag_indices(self, hand_of_cards: list[Card]) -> tuple[int, int] | None:
-        """Drag origin→target to merge two gauge cards; scan copy lifts GROUND so merges are visible.
+    def _best_merge_drag_indices(
+        self,
+        hand_of_cards: list[Card],
+        templates: Sequence[str],
+        *,
+        rank: CardRanks | None = None,
+        log_label: str | None = None,
+    ) -> tuple[int, int] | None:
+        """Drag origin→target to merge two cards matching ``templates``.
+
+        Scan copy sets matching cards to ATTACK so merge prediction sees them (hand may use GROUND).
 
         Prefer the rightmost merge: maximize target index b, then origin a (lexicographic on (b, a)).
         """
@@ -395,21 +467,25 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             return None
         scan = deepcopy(hand_of_cards)
         for card in scan:
-            if self._card_matches_any(card, GAUGE_REMOVAL_TEMPLATES) and card.card_type == CardTypes.GROUND:
+            if self._card_matches_any(card, templates):
                 card.card_type = CardTypes.ATTACK
         best: tuple[int, int] | None = None
         for a in range(n - 1):
             for b in range(a + 1, n):
-                if not self._card_matches_any(scan[a], GAUGE_REMOVAL_TEMPLATES):
+                ca, cb = scan[a], scan[b]
+                if not self._card_matches_any(ca, templates):
                     continue
-                if not self._card_matches_any(scan[b], GAUGE_REMOVAL_TEMPLATES):
+                if not self._card_matches_any(cb, templates):
                     continue
-                if not determine_card_merge(scan[a], scan[b]):
+                if rank is not None and (ca.card_rank != rank or cb.card_rank != rank):
+                    continue
+                if not determine_card_merge(ca, cb):
                     continue
                 if best is None or (b, a) > (best[1], best[0]):
                     best = (a, b)
         if best is not None:
-            print(f"Dragging gauge merge {best[0]} → {best[1]} (insufficient gold)")
+            label = log_label or "merge"
+            print(f"Dragging {label} {best[0]} → {best[1]}")
         return best
 
     def _card_matches_any(self, card: Card, template_names: Sequence[str]) -> bool:
