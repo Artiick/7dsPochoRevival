@@ -223,10 +223,16 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 hand_of_cards[i].card_type = CardTypes.GROUND
 
         # Phase 2: Tuck one SILVER/GOLD roxy_st so Smarter skips it (same pattern as _smarter_phase3).
+        roxy_st_hi = (CardRanks.SILVER, CardRanks.GOLD)
         if type(self).roxy_in_team:
-            roxy_st_saveable = self._tr(hand_of_cards, ("roxy_st",), (CardRanks.SILVER, CardRanks.GOLD))
+            roxy_st_saveable = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
             if roxy_st_saveable.size > 0:
                 hand_of_cards[int(roxy_st_saveable[-1])].card_type = CardTypes.GROUND
+        # All-GROUND confuses downstream; unstick one SILVER/GOLD roxy_st to DISABLED if needed.
+        if hand_of_cards and all(c.card_type == CardTypes.GROUND for c in hand_of_cards):
+            rx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
+            if rx.size > 0:
+                hand_of_cards[int(rx[-1])].card_type = CardTypes.DISABLED
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
