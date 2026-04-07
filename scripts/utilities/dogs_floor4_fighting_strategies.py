@@ -243,6 +243,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         self._maybe_reset("phase_3")
 
         print(f"Phase 3: fight turn {IBattleStrategy.fight_turn}")
+        if IBattleStrategy.fight_turn % 2 == 0:
+            print("Dog is putting up a taunt...")
+            DogsFloor4BattleStrategy.taunt_removed = False
 
         # Let's set to GROUND all ST gauge cards
         st_gauge_ids = [i for i, card in enumerate(hand_of_cards) if self._card_matches_any(card, ST_GAUGE_TEMPLATES)]
