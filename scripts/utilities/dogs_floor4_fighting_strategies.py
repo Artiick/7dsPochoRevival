@@ -429,11 +429,15 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             roxy_st_saveable = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
             if roxy_st_saveable.size > 0:
                 hand_of_cards[int(roxy_st_saveable[-1])].card_type = CardTypes.GROUND
-        # All-GROUND confuses downstream; unstick one SILVER/GOLD roxy_st to DISABLED if needed.
+
+        # If ALL are ground, just move a card...
         if hand_of_cards and all(c.card_type == CardTypes.GROUND for c in hand_of_cards):
-            rx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
-            if rx.size > 0:
-                hand_of_cards[int(rx[-1])].card_type = CardTypes.DISABLED
+            print("All cards are ground, just moving a card...")
+            return [-1, -2]
+            # rx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
+            # if rx.size > 0:
+            #     hand_of_cards[int(rx[-1])].card_type = CardTypes.DISABLED
+
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
     def _best_matching_card(
