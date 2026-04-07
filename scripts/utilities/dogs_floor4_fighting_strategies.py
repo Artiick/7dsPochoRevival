@@ -117,14 +117,14 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     def get_next_card_index_phase1(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
         self._maybe_reset("phase_1")
 
+        # Let's start with Escalin's talent
+        screenshot, window_location = capture_window()
+        if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+            print("Phase 3: activating Escalin talent!")
+            time.sleep(2.5)
+
         # Phase 1: First turn, play a sequence of cards
         if IBattleStrategy.fight_turn == 0:
-
-            # Let's start with Escalin's talent
-            screenshot, window_location = capture_window()
-            if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
-                print("Phase 3: activating Escalin talent!")
-                time.sleep(2.5)
 
             stance_already_picked = bool(self._matching_card_ids(picked_cards, ("thonar_stance",)))
             if not stance_already_picked:
