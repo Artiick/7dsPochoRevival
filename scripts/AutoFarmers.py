@@ -140,7 +140,12 @@ C_LIGHT = {
 }
 
 # Theme persistence
-_THEME_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".theme")
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CONFIG_DIR = os.path.join(_BASE_DIR, "config")
+
+os.makedirs(_CONFIG_DIR, exist_ok=True)
+
+_THEME_FILE = os.path.join(_CONFIG_DIR, ".theme")
 
 def _load_theme() -> str:
     try:
@@ -148,6 +153,7 @@ def _load_theme() -> str:
             return _f.read().strip()
     except Exception:
         return "dark"
+
 
 def _save_theme(name: str):
     with open(_THEME_FILE, "w") as _f:
