@@ -9,3 +9,4 @@ cython_build/
 *original.py
 .venv/
 .cursor/
+scripts/config/.theme

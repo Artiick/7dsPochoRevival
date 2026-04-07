@@ -15,20 +15,22 @@
 # AutoFarmers GUI (PyQt5)
 # Dropdown + stacked pages for all farmer scripts, with argument fields, terminal output, and process control.
 
-import contextlib
+import datetime
 import os
 import re
-import signal
 import sys
 import time
 
-from PyQt5.QtCore import QProcess, QProcessEnvironment, Qt, QTimer, QUrl
+from PyQt5.QtCore import QProcess, QProcessEnvironment, Qt, QTimer, QUrl, pyqtSignal
 from PyQt5.QtGui import (
     QColor,
     QDesktopServices,
     QFont,
-    QPalette,
+    QImage,
+    QPainter,
+    QPainterPath,
     QPixmap,
+    QTextBlockFormat,
     QTextCharFormat,
     QTextCursor,
 )
@@ -37,6 +39,8 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
+    QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -48,10 +52,9 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpinBox,
-    QSplitter,
     QStackedWidget,
+    QProgressBar,
     QTextEdit,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -81,6 +84,227 @@ FREE_SOFTWARE_MESSAGE = """=====================================================
 =====================================================================
 
 """
+
+# Tokyo Night (dark) palette
+C_DARK = {
+    "bg":           "#0f0f17",
+    "panel":        "#171724",
+    "panel2":       "#1e1e2e",
+    "panel3":       "#1a1a2e",
+    "border":       "#252535",
+    "border2":      "#2e2e45",
+    "accent":       "#8b5cf6",
+    "accent_light": "#c4b5fd",
+    "running":      "#10b981",
+    "warning":      "#f59e0b",
+    "error":        "#ef4444",
+    "blue":         "#3b82f6",
+    "text":         "#e2e8f0",
+    "dim":          "#9ca3af",
+    "muted":        "#6b7280",
+    "dark":         "#4b5563",
+    "darker":       "#374151",
+    "term_bg":      "#16161e",
+    "term_text":    "#c0caf5",
+    "tile_bg":      "#171724",
+    "tile_hover":   "#1e1e2e",
+    "btn_sec_bg":   "transparent",
+    "btn_sec_text": "#6b7280",
+}
+
+# Light palette
+C_LIGHT = {
+    "bg":           "#F4F7FB",
+    "panel":        "#E9F1FF",
+    "panel2":       "#eef4ff",
+    "panel3":       "#e2ecff",
+    "border":       "#D6E4FF",
+    "border2":      "#c5d8ff",
+    "accent":       "#3B82F6",
+    "accent_light": "#1d4ed8",
+    "running":      "#16a34a",
+    "warning":      "#d97706",
+    "error":        "#dc2626",
+    "blue":         "#2563eb",
+    "text":         "#1A2A44",
+    "dim":          "#2d4a6e",
+    "muted":        "#5a7a9f",
+    "dark":         "#8aaac8",
+    "darker":       "#dbe8f8",
+    "term_bg":      "#1e1e2e",
+    "term_text":    "#c0caf5",
+    "tile_bg":      "#FFFFFF",
+    "tile_hover":   "#EEF4FF",
+    "btn_sec_bg":   "#E5EDFF",
+    "btn_sec_text": "#3B82F6",
+}
+
+# Theme persistence
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CONFIG_DIR = os.path.join(_BASE_DIR, "config")
+
+os.makedirs(_CONFIG_DIR, exist_ok=True)
+
+_THEME_FILE = os.path.join(_CONFIG_DIR, ".theme")
+
+def _load_theme() -> str:
+    try:
+        with open(_THEME_FILE) as _f:
+            return _f.read().strip()
+    except Exception:
+        return "dark"
+
+
+def _save_theme(name: str):
+    with open(_THEME_FILE, "w") as _f:
+        _f.write(name)
+
+_ACTIVE_THEME = _load_theme()
+C = C_LIGHT if _ACTIVE_THEME == "light" else C_DARK
+
+# Action Button Styles 
+_BTN = "color: white; font-weight: bold; padding: 7px 4px; border: none; border-radius: 6px;"
+BTN_START  = f"background-color: {C['accent']}; {_BTN}"
+BTN_STOP   = f"background-color: {C['error']}; {_BTN}"
+BTN_PAUSE  = f"background-color: {C['warning']}; {_BTN}"
+BTN_RESIZE = f"background-color: {C['blue']}; {_BTN}"
+BTN_CLEAR  = f"background-color: {C['darker']}; color: {C['text']}; font-weight: bold; padding: 7px 4px; border: none; border-radius: 6px;"
+
+_GUI_IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "gui_images")
+
+def _make_stylesheet() -> str:
+    check_icon = os.path.join(_GUI_IMAGES_DIR, "check.svg").replace("\\", "/")
+    return f"""
+QWidget {{
+    background-color: {C['bg']};
+    color: {C['text']};
+    font-family: Consolas, monospace;
+    font-size: 13px;
+}}
+QScrollArea, QAbstractScrollArea {{
+    background-color: {C['bg']};
+    border: none;
+}}
+QScrollArea > QWidget > QWidget {{
+    background-color: {C['bg']};
+}}
+QLineEdit, QSpinBox {{
+    background-color: {C['bg']};
+    border: 1px solid {C['border2']};
+    border-radius: 5px;
+    color: {C['dim']};
+    padding: 5px 8px;
+    font-size: 13px;
+    selection-background-color: {C['accent']};
+}}
+QLineEdit:focus, QSpinBox:focus {{
+    border-color: {C['accent']};
+}}
+QComboBox {{
+    background-color: {C['bg']};
+    border: 1px solid {C['border2']};
+    border-radius: 5px;
+    color: {C['dim']};
+    padding: 5px 8px;
+    font-size: 13px;
+    selection-background-color: {C['accent']};
+}}
+QComboBox:focus {{ border-color: {C['accent']}; }}
+QComboBox::drop-down {{ border: none; background: transparent; width: 18px; }}
+QComboBox QAbstractItemView {{
+    background: {C['panel2']};
+    border: 1px solid {C['border2']};
+    color: {C['dim']};
+    selection-background-color: {C['accent']};
+    outline: none;
+}}
+QCheckBox {{
+    color: {C['muted']};
+    font-size: 13px;
+    spacing: 6px;
+}}
+QCheckBox::indicator {{
+    width: 13px; height: 13px;
+    border: 1px solid {C['border2']};
+    border-radius: 3px;
+    background: {C['bg']};
+}}
+QCheckBox::indicator:checked {{
+    background: {C['accent']};
+    border-color: {C['accent']};
+    image: url({check_icon});
+}}
+QListWidget {{
+    background: {C['bg']};
+    border: 1px solid {C['border2']};
+    border-radius: 5px;
+    color: {C['dim']};
+    font-size: 13px;
+}}
+QListWidget::item:selected {{
+    background: {C['accent']};
+    color: white;
+    border-radius: 3px;
+}}
+QListWidget::item:hover {{ background: {C['panel2']}; }}
+QGroupBox {{
+    border: 1px solid {C['border']};
+    border-radius: 8px;
+    margin-top: 14px;
+    font-size: 13px;
+    font-weight: bold;
+    color: {C['text']};
+    padding: 8px;
+}}
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 12px;
+    top: -1px;
+    padding: 0 6px;
+    color: {C['text']};
+    background-color: {C['bg']};
+}}
+QLabel {{ color: {C['text']}; background: transparent; }}
+QPushButton {{
+    border: 1px solid {C['border2']};
+    border-radius: 5px;
+    padding: 6px 12px;
+    color: {C['muted']};
+    background: transparent;
+    font-size: 13px;
+}}
+QPushButton:hover {{ border-color: {C['accent']}; color: {C['accent_light']}; }}
+QPushButton:pressed {{ background: transparent; border-color: {C['accent']}; }}
+QPushButton:disabled {{ color: {C['darker']}; border-color: {C['panel2']}; }}
+QScrollBar:vertical {{
+    background: {C['panel2']};
+    width: 6px;
+    margin: 0;
+    border-radius: 3px;
+}}
+QScrollBar::handle:vertical {{
+    background: {C['border2']};
+    border-radius: 3px;
+    min-height: 20px;
+}}
+QScrollBar::handle:vertical:hover {{ background: {C['accent']}; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+    height: 0; background: none;
+}}
+QScrollBar:horizontal {{ height: 0; background: none; }}
+QTextEdit {{
+    background: {C['term_bg']};
+    color: {C['term_text']};
+    border: none;
+    font-family: Consolas, monospace;
+    font-size: 13px;
+    selection-background-color: {C['accent']};
+}}
+"""
+
+APP_STYLESHEET = _make_stylesheet()
 
 # Requirements for whale farmers (displayed in GUI)
 REQUIREMENTS = {
@@ -384,6 +608,37 @@ FARMERS = [
     },
 ]
 
+_UPTIME_CYCLE_SECS = 12 * 3600  # Session uptime bar resets every 12 hours
+
+# Maps each farmer script to the stdout pattern that signals one clear completed.
+# Patterns are taken directly from the print() calls in each farming logic file.
+_CLEAR_RE: dict[str, re.Pattern] = {
+    # Demonic Beast farmers (floor 3 = full cycle): demonic_beast_farming_logic.py:302
+    "BirdFarmer.py":          re.compile(r"Floor 3 complete!"),
+    "DeerFarmer.py":          re.compile(r"Floor 3 complete!"),
+    "DogsFarmer.py":          re.compile(r"Floor 3 complete!"),
+    "SnakeFarmer.py":         re.compile(r"Floor 3 complete!"),
+    "RatFarmer.py":           re.compile(r"Floor 3 complete!"),
+    # Floor 4 farmers: floor_4_farming_logic.py:239
+    "BirdFloor4Farmer.py":    re.compile(r"FLOOR 4 COMPLETE, WOOO!"),
+    "DeerFloor4Farmer.py":    re.compile(r"FLOOR 4 COMPLETE, WOOO!"),
+    "DogsFloor4Farmer.py":    re.compile(r"FLOOR 4 COMPLETE, WOOO!"),
+    # Demon King: demon_king_farming_logic.py:174
+    "DemonKingFarmer.py":     re.compile(r"Fight complete! Cleared DK \d+ times\."),
+    # Final Boss: final_boss_farming_logic.py:142
+    "FinalBossFarmer.py":     re.compile(r"FB cleared! \d+ times so far\."),
+    # Legendary Boss: legendary_boss_farming_logic.py:159
+    "LegendaryBossFarmer.py": re.compile(r"LB cleared! \d+ times so far\."),
+    # SA Dungeon: sa_dungeon_farming_logic.py:279
+    "SADungeonFarmer.py":     re.compile(r"We've completed \d+ runs so far"),
+    # Tower Trials: tower_trials_farming_logic.py:87
+    "TowerTrialsFarmer.py":   re.compile(r"Fighting again! Total fights so far: \d+"),
+    # Boss Battle: boss_battle_farming_logic.py:127
+    "BossBattleFarmer.py":    re.compile(r"We've completed \d+ runs so far\."),
+    # Guild Boss: guild_boss_farming_logic.py:111 (logger → merged channels)
+    "GuildBossFarmer.py":     re.compile(r"Did \d+ runs\. Re-starting the fight!"),
+}
+
 # Farmer scripts that accept --password / -p (must match argparse in each script).
 PASSWORD_CLI_SCRIPTS = frozenset(
     {
@@ -410,6 +665,7 @@ class AboutTab(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        self.setStyleSheet(f"background: {C['bg']};")
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
         layout.setContentsMargins(30, 20, 30, 20)
@@ -420,15 +676,15 @@ class AboutTab(QWidget):
 
         # Main title
         title = QLabel("🚀 AutoFarmers — 7DS Grand Cross")
-        title.setFont(QFont("Arial", 18, QFont.Bold))
+        title.setFont(QFont("Consolas", 18, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
         title_layout.addWidget(title)
 
         # Tagline
         tagline = QLabel("Automate the grind. Save your time.")
-        tagline.setFont(QFont("Arial", 12))
+        tagline.setFont(QFont("Consolas", 12))
         tagline.setAlignment(Qt.AlignCenter)
-        tagline.setStyleSheet("color: #666; font-style: italic;")
+        tagline.setStyleSheet(f"color: {C['muted']}; font-style: italic;")
         title_layout.addWidget(tagline)
 
         layout.addLayout(title_layout)
@@ -445,7 +701,7 @@ class AboutTab(QWidget):
         # Status line
         self.status_label = QLabel("")
         self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet("color: #888; font-size: 15px;")
+        self.status_label.setStyleSheet(f"color: {C['muted']}; font-size: 15px;")
         layout.addWidget(self.status_label)
 
         layout.addStretch(1)
@@ -454,11 +710,11 @@ class AboutTab(QWidget):
         """Load and display the hero image"""
         img_label = QLabel()
         img_label.setAlignment(Qt.AlignCenter)
-        img_label.setStyleSheet("border: 1px solid #aaa; background: #e0e0e0;")
+        img_label.setStyleSheet(f"border: 1px solid {C['border']}; background: {C['panel2']}; border-radius: 8px;")
 
         # Try to load the GUI image from readme_images
         image_paths = [
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), "gui_images", "main_gui.jpg"),
+            os.path.join(_GUI_IMAGES_DIR, "main_gui.jpg"),
         ]
 
         image_loaded = False
@@ -476,7 +732,7 @@ class AboutTab(QWidget):
         if not image_loaded:
             img_label.setText("🖼️ AutoFarmers GUI\n(Image not found)")
             img_label.setFixedSize(640, 360)
-            img_label.setStyleSheet("border: 1px solid #aaa; background: #e0e0e0; color: #666; font-size: 14px;")
+            img_label.setStyleSheet(f"border: 1px solid {C['border']}; background: {C['panel2']}; color: {C['dark']}; border-radius: 8px; font-size: 14px;")
 
         # Center the image
         img_layout = QHBoxLayout()
@@ -495,13 +751,13 @@ class AboutTab(QWidget):
 
         # Update button (primary)
         self.update_btn = QPushButton("🔄 UPDATE")
-        self.update_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 8px 16px;")
+        self.update_btn.setStyleSheet(f"background-color: {C['accent']}; color: white; font-weight: bold; padding: 8px 16px;")
         self.update_btn.clicked.connect(self.on_update_clicked)
         btn_layout.addWidget(self.update_btn)
 
         # GitHub button
         github_btn = QPushButton("🐙 GitHub")
-        github_btn.setStyleSheet("background-color: #333; color: white; font-weight: bold; padding: 8px 16px;")
+        github_btn.setStyleSheet(f"background-color: {C['dark']}; color: white; font-weight: bold; padding: 8px 16px;")
         github_btn.clicked.connect(lambda: self.open_url("https://github.com/PhantomPilots/AutoFarming"))
         btn_layout.addWidget(github_btn)
 
@@ -526,7 +782,7 @@ class AboutTab(QWidget):
 <p>Automate your farming in Seven Deadly Sins: Grand Cross with this collection of specialized bots.</p>
         """
         )
-        desc_label.setStyleSheet("font-size: 12px; line-height: 1.4;")
+        desc_label.setStyleSheet(f"font-size: 13px; color: {C['dim']}; line-height: 1.4;")
         layout.addWidget(desc_label)
 
         # Available Farmers and Requirements in two columns
@@ -545,7 +801,7 @@ class AboutTab(QWidget):
 • Equipment farming and constellation rerolls</p>
         """
         )
-        farmers_label.setStyleSheet("font-size: 12px; line-height: 1.4;")
+        farmers_label.setStyleSheet(f"font-size: 13px; color: {C['dim']}; line-height: 1.4;")
         farmers_req_layout.addWidget(farmers_label)
 
         # Right column - Requirements
@@ -561,7 +817,7 @@ class AboutTab(QWidget):
 • Disable all game notifications</p>
         """
         )
-        req_label.setStyleSheet("font-size: 12px; line-height: 1.4;")
+        req_label.setStyleSheet(f"font-size: 13px; color: {C['dim']}; line-height: 1.4;")
         farmers_req_layout.addWidget(req_label)
 
         layout.addLayout(farmers_req_layout)
@@ -571,7 +827,7 @@ class AboutTab(QWidget):
         cta_label.setWordWrap(True)
         cta_label.setAlignment(Qt.AlignCenter)
         cta_label.setText("<p><em>Pick a farmer tab to configure and start, and join our Discord for help!</em></p>")
-        cta_label.setStyleSheet("font-size: 12px; line-height: 1.4; font-style: italic; color: #666;")
+        cta_label.setStyleSheet(f"font-size: 13px; color: {C['dim']}; line-height: 1.4; font-style: italic;")
         layout.addWidget(cta_label)
 
     def on_update_clicked(self):
@@ -673,6 +929,7 @@ class SettingsTab(QWidget):
         self.reload_from_disk()
 
     def init_ui(self):
+        self.setStyleSheet(f"background: {C['bg']};")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 20, 30, 20)
         layout.setSpacing(14)
@@ -692,7 +949,7 @@ class SettingsTab(QWidget):
             "Pick something long and random so only you get the messages."
         )
         help_ntfy.setWordWrap(True)
-        help_ntfy.setStyleSheet("color: #555;")
+        help_ntfy.setStyleSheet(f"color: {C['muted']};")
         ntfy_outer.addWidget(help_ntfy)
 
         topic_row = QHBoxLayout()
@@ -723,7 +980,7 @@ class SettingsTab(QWidget):
         stuck_form.addRow("How long before warning you:", self.stuck_spin)
         stuck_hint = QLabel("0 = off (no stuck warnings).")
         stuck_hint.setWordWrap(True)
-        stuck_hint.setStyleSheet("color: #555; font-size: 11px;")
+        stuck_hint.setStyleSheet(f"color: {C['muted']}; font-size: 13px;")
         stuck_form.addRow("", stuck_hint)
 
         self.cooldown_spin = QSpinBox()
@@ -732,7 +989,7 @@ class SettingsTab(QWidget):
         stuck_form.addRow("Space between repeat warnings:", self.cooldown_spin)
         cd_hint = QLabel("Won't ping faster than about every 30 seconds.")
         cd_hint.setWordWrap(True)
-        cd_hint.setStyleSheet("color: #555; font-size: 11px;")
+        cd_hint.setStyleSheet(f"color: {C['muted']}; font-size: 13px;")
         stuck_form.addRow("", cd_hint)
 
         self.max_notif_spin = QSpinBox()
@@ -740,7 +997,7 @@ class SettingsTab(QWidget):
         stuck_form.addRow("Max warnings per stuck episode:", self.max_notif_spin)
         max_hint = QLabel("0 = no warnings for that episode.")
         max_hint.setWordWrap(True)
-        max_hint.setStyleSheet("color: #555; font-size: 11px;")
+        max_hint.setStyleSheet(f"color: {C['muted']}; font-size: 13px;")
         stuck_form.addRow("", max_hint)
 
         stuck_group.setLayout(stuck_form)
@@ -754,7 +1011,7 @@ class SettingsTab(QWidget):
             "After a logout, the bot waits the number of minutes below before it tries to log in."
         )
         pwd_help.setWordWrap(True)
-        pwd_help.setStyleSheet("color: #555;")
+        pwd_help.setStyleSheet(f"color: {C['muted']};")
         pwd_outer.addWidget(pwd_help)
         pwd_row = QHBoxLayout()
         pwd_row.addWidget(QLabel("Password:"))
@@ -774,9 +1031,10 @@ class SettingsTab(QWidget):
 
         actions = QHBoxLayout()
         self.save_btn = QPushButton("Save")
-        self.save_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.save_btn.setStyleSheet(f"background-color: {C['running']}; color: white; font-weight: bold; padding: 7px 20px; border: none; border-radius: 6px;")
         self.save_btn.clicked.connect(self.on_save)
         self.reload_btn = QPushButton("Load saved")
+        self.reload_btn.setStyleSheet(f"background-color: {C['darker']}; color: {C['text']}; font-weight: bold; padding: 7px 20px; border: none; border-radius: 6px;")
         self.reload_btn.clicked.connect(self.reload_from_disk)
         actions.addWidget(self.save_btn)
         actions.addWidget(self.reload_btn)
@@ -789,7 +1047,7 @@ class SettingsTab(QWidget):
 
         footnote = QLabel("Already running a farmer? Stop it and press Start again so it picks up new settings.")
         footnote.setWordWrap(True)
-        footnote.setStyleSheet("color: #666; font-size: 11px;")
+        footnote.setStyleSheet(f"color: {C['dark']}; font-size: 13px;")
         layout.addWidget(footnote)
         layout.addStretch(1)
 
@@ -817,7 +1075,7 @@ class SettingsTab(QWidget):
         self.password_edit.setText("" if pw is None else str(pw))
         self.login_wait_spin.setValue(self._int_from_data(data, "minutes_to_wait_before_login"))
         self.status_label.setText("Loaded saved settings.")
-        self.status_label.setStyleSheet("color: #666;")
+        self.status_label.setStyleSheet(f"color: {C['muted']};")
 
     def on_save(self):
         try:
@@ -835,54 +1093,80 @@ class SettingsTab(QWidget):
             )
             config.reload()
             self.status_label.setText("Saved.")
-            self.status_label.setStyleSheet("color: #2e7d32;")
+            self.status_label.setStyleSheet("color: #10b981;")
         except Exception as e:
             self.status_label.setText(f"Save failed: {e}")
-            self.status_label.setStyleSheet("color: #c62828;")
+            self.status_label.setStyleSheet("color: #ef4444;")
 
     def on_test_notification(self):
         config.reload()
         ok, msg = test_ntfy_connection()
         self.status_label.setText(msg)
-        self.status_label.setStyleSheet("color: #2e7d32;" if ok else "color: #c62828;")
+        self.status_label.setStyleSheet("color: #10b981;" if ok else "color: #ef4444;")
 
 
 class FarmerTab(QWidget):
     _COLOR_TAG_RE = re.compile(r"<color=([^>]+)>(.*?)</color>", re.IGNORECASE | re.DOTALL)
+    _LINE_COLOR_RULES = [
+        (re.compile(r"error|failed|exception|traceback|critical", re.I), "#ef4444"),
+        (re.compile(r"\bwarn(ing)?\b", re.I),                            "#f59e0b"),
+        (re.compile(r"success|complet|finished|victory|cleared|✓|✅",   re.I), "#10b981"),
+        (re.compile(r"\b(info|start|launch|connect|running)\b",          re.I), "#3b82f6"),
+        (re.compile(r"^\s*[>=\-#]{3,}"),                                 "#4b5563"),
+    ]
 
-    def __init__(self, farmer, password_supplier=None, parent=None):
+    def __init__(self, farmer, password_supplier=None, running_changed_cb=None, parent=None):
         super().__init__(parent)
         self.farmer = farmer
         self._password_supplier = password_supplier
         self.process = None
         self.output_lines = []
         self.paused = False
+        self._running_changed_cb = running_changed_cb
         self.sa_chest_warning_label = None
         self._default_fmt = QTextCharFormat()
-        self._default_fmt.setForeground(QColor("#eeeeee"))
+        self._default_fmt.setForeground(QColor("#c0caf5"))
+        # Session Progress state
+        self._session_clears = 0
+        self._session_max_clears = None  # None = inf
+        self._session_start_time = None
+        self._pause_start_time = None
+        self._last_clear_time = None
+        self._uptime_timer = None
+        self.output_timer = None
         self.init_ui()
 
     def init_ui(self):
         layout = QHBoxLayout(self)
-        # Left panel
-        left_panel = QVBoxLayout()
-        # Title
-        title = QLabel(f"{self.farmer['name']}")
-        title.setFont(QFont("Arial", 12, QFont.Bold))
-        left_panel.addWidget(title)
+        layout.addLayout(self._build_left_panel(), 1)
+        layout.addLayout(self._build_right_panel(), 2)
+        self.setLayout(layout)
+        self._append_terminal_centered(FREE_SOFTWARE_MESSAGE)
+
+    def _build_left_panel(self):
+        panel = QVBoxLayout()
+
         # Image
         self.image_size = (400, 250)
         self.image_label = QLabel(f"[Image Placeholder]\n{self.image_size[0]}x{self.image_size[1]}")
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("border: 1px solid #aaa; background: #e0e0e0; color: #666;")
+        self.image_label.setStyleSheet(
+            f"border: 1px solid {C['border']}; background: {C['panel2']};"
+            f" color: {C['dark']}; border-radius: 5px;"
+        )
         self.image_label.setFixedSize(*self.image_size)
-
         self.load_farmer_image()
+        panel.addWidget(self.image_label, 0, Qt.AlignHCenter)
 
-        left_panel.addWidget(self.image_label)
         # Arguments
         if self.farmer["args"]:
             args_group = QGroupBox("Arguments")
+            args_group.setStyleSheet(
+                f"QGroupBox {{ margin-top: 21px; border: 1px solid {C['border']}; border-radius: 8px;"
+                f" font-size: 14px; font-weight: bold; color: {C['dim']}; padding: 8px; }}"
+                f"QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left;"
+                f" padding: 0 6px; left: 12px; }}"
+            )
             args_layout = QFormLayout()
             self.arg_widgets = {}
             for arg in self.farmer["args"]:
@@ -894,14 +1178,19 @@ class FarmerTab(QWidget):
                     widget = QCheckBox()
                     widget.setChecked(arg.get("default", False))
                 elif arg["type"] == "multiselect":
-                    widget = QListWidget()
-                    widget.setSelectionMode(QListWidget.MultiSelection)
+                    widget = QFrame()
+                    widget.setStyleSheet(
+                        f"QFrame {{ border: 1px solid {C['border2']}; border-radius: 5px; background: {C['bg']}; }}"
+                    )
+                    _vbox = QVBoxLayout(widget)
+                    _vbox.setContentsMargins(8, 6, 8, 6)
+                    _vbox.setSpacing(4)
+                    widget._checkboxes = []
                     for choice in arg["choices"]:
-                        item = QListWidgetItem(choice)
-                        widget.addItem(item)
-                        if choice in arg.get("default", []):
-                            item.setSelected(True)
-                    widget.setMaximumHeight(80)
+                        cb = QCheckBox(choice)
+                        cb.setChecked(choice in arg.get("default", []))
+                        _vbox.addWidget(cb)
+                        widget._checkboxes.append(cb)
                 else:
                     widget = QLineEdit()
                     widget.setText(arg["default"])
@@ -913,16 +1202,17 @@ class FarmerTab(QWidget):
                 if arg["name"] == "--whale":
                     widget.stateChanged.connect(self._refresh_whale_mode)
             args_group.setLayout(args_layout)
-            left_panel.addWidget(args_group)
+            panel.addWidget(args_group)
 
             if self.farmer["name"] == "SA Coin Dungeon Farmer":
                 self.sa_chest_warning_label = QLabel()
                 self.sa_chest_warning_label.setWordWrap(True)
                 self.sa_chest_warning_label.setStyleSheet(
-                    "font-size: 12px; color: #8B0000; border: 1px solid #8B0000; padding: 6px;"
+                    f"font-size: 13px; color: {C['error']}; border: 1px solid {C['error']};"
+                    f" border-radius: 5px; padding: 6px; background: rgba(239,68,68,0.1);"
                 )
                 self.sa_chest_warning_label.hide()
-                left_panel.addWidget(self.sa_chest_warning_label)
+                panel.addWidget(self.sa_chest_warning_label)
                 self.update_sa_chest_warning(self.arg_widgets["--min-chest-type"].currentText())
         else:
             self.arg_widgets = {}
@@ -934,54 +1224,152 @@ class FarmerTab(QWidget):
             self.req_label.setWordWrap(True)
             self.req_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
             self.req_label.setText(REQUIREMENTS.get(self.farmer["name"], ""))
-            self.req_label.setStyleSheet("font-size: 13px; color: #777; line-height: 1.2;")
-            self.req_label.setMaximumHeight(180)
-            self.req_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-            left_panel.addWidget(self.req_label)
-            left_panel.addSpacing(4)
+            self.req_label.setStyleSheet(
+                f"font-size: 13px; color: {C['dim']}; line-height: 1.4; background: {C['panel3']};"
+                f" border-left: 3px solid {C['accent']}; padding: 9px 12px; border-radius: 0 5px 5px 0;"
+            )
+            req_scroll = QScrollArea()
+            req_scroll.setWidget(self.req_label)
+            req_scroll.setWidgetResizable(True)
+            req_scroll.setMaximumHeight(180)
+            req_scroll.setStyleSheet(
+                f"QScrollArea {{ background: {C['panel3']}; border-left: 3px solid {C['accent']};"
+                f" border-radius: 0 5px 5px 0; border-top: none; border-right: none; border-bottom: none; }}"
+            )
+            panel.addWidget(req_scroll)
+            panel.addSpacing(4)
 
-        # Start/Stop buttons
+        # Action buttons
         btn_layout = QHBoxLayout()
         self.start_btn = QPushButton("START")
-        self.start_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.start_btn.setStyleSheet(BTN_START)
         self.start_btn.clicked.connect(self.start_farmer)
-        btn_layout.addWidget(self.start_btn)
         self.stop_btn = QPushButton("STOP")
-        self.stop_btn.setStyleSheet("background-color: #F44336; color: white; font-weight: bold;")
+        self.stop_btn.setStyleSheet(BTN_STOP)
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self.stop_farmer)
-        btn_layout.addWidget(self.stop_btn)
         self.pause_btn = QPushButton("PAUSE")
-        self.pause_btn.setStyleSheet("background-color: #FFC107; color: white; font-weight: bold;")
+        self.pause_btn.setStyleSheet(BTN_PAUSE)
         self.pause_btn.setEnabled(False)
         self.pause_btn.clicked.connect(self.toggle_pause)
-        btn_layout.addWidget(self.pause_btn)
         self.resize_btn = QPushButton("RESIZE")
-        self.resize_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold;")
+        self.resize_btn.setStyleSheet(BTN_RESIZE)
         self.resize_btn.clicked.connect(self.resize_window)
-        btn_layout.addWidget(self.resize_btn)
         self.clear_btn = QPushButton("CLEAR")
-        self.clear_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        self.clear_btn.setStyleSheet(BTN_CLEAR)
         self.clear_btn.clicked.connect(self.clear_output)
-        btn_layout.addWidget(self.clear_btn)
-        left_panel.addLayout(btn_layout)
-        left_panel.addStretch(1)
-        layout.addLayout(left_panel, 1)
-        # Right panel (terminal)
-        right_panel = QVBoxLayout()
-        terminal_label = QLabel("Output")
-        terminal_label.setFont(QFont("Arial", 12, QFont.Bold))
-        right_panel.addWidget(terminal_label)
+        for btn in (self.start_btn, self.stop_btn, self.pause_btn, self.resize_btn, self.clear_btn):
+            btn_layout.addWidget(btn)
+
+        panel.addLayout(btn_layout)
+        panel.addStretch(1)
+        return panel
+
+    def _build_right_panel(self):
+        panel = QVBoxLayout()
+
         self.terminal = QTextEdit()
         self.terminal.setReadOnly(True)
-        self.terminal.setFont(QFont("Consolas", 9))
-        self.terminal.setStyleSheet("background: #222; color: #eee;")
-        right_panel.addWidget(self.terminal, 1)
-        layout.addLayout(right_panel, 2)
-        self.setLayout(layout)
+        _term_font = QFont("Consolas")
+        _term_font.setPixelSize(15)
+        self.terminal.document().setDefaultFont(_term_font)
+        self._default_fmt.setFont(_term_font)
+        self.terminal.setStyleSheet(
+            f"background: {C['term_bg']}; color: {C['term_text']}; border: none; border-radius: 5px;"
+            " padding: 10px 14px; font-family: Consolas, monospace;"
+            " font-size: 15px; line-height: 1.6;"
+        )
+        panel.addWidget(self.terminal, 1)
+        panel.addWidget(self._build_session_progress())
+        return panel
 
-        # Display free software message in terminal
-        self.append_terminal(FREE_SOFTWARE_MESSAGE)
+    def _build_session_progress(self):
+        """Widget shown below the terminal with session stats."""
+        container = QFrame()
+        container.setStyleSheet(
+            f"background: {C['panel2']}; border-top: 1px solid {C['border2']}; border-radius: 5px;"
+        )
+        outer = QHBoxLayout(container)
+        outer.setContentsMargins(14, 10, 14, 10)
+        outer.setSpacing(0)
+
+        def section_label(text):
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                f"font-size: 13px; font-weight: 700; color: {C['muted']};"
+                " letter-spacing: 2px; background: transparent; border: none;"
+            )
+            return lbl
+
+        def make_row(parent_lay, key_text, value_text="--"):
+            row = QHBoxLayout()
+            row.setSpacing(4)
+            key = QLabel(key_text)
+            key.setStyleSheet(
+                f"color: {C['dim']}; font-size: 13px; background: transparent; border: none;"
+            )
+            val = QLabel(value_text)
+            val.setStyleSheet(
+                f"color: {C['text']}; font-size: 13px; font-weight: 600;"
+                " background: transparent; border: none;"
+            )
+            val.setAlignment(Qt.AlignRight)
+            row.addWidget(key)
+            row.addStretch()
+            row.addWidget(val)
+            parent_lay.addLayout(row)
+            return val
+
+        def make_bar_metric(parent_lay, key_text, value_text="--", bar_max=100, bar_color=None):
+            val = make_row(parent_lay, key_text, value_text)
+            bar = QProgressBar()
+            bar.setTextVisible(False)
+            bar.setFixedHeight(4)
+            bar.setMaximum(bar_max)
+            bar.setValue(0)
+            chunk_color = bar_color or C["accent"]
+            bar.setStyleSheet(
+                f"QProgressBar {{ background: {C['border']}; border: none; border-radius: 2px; }}"
+                f"QProgressBar::chunk {{ background: {chunk_color}; border-radius: 2px; }}"
+            )
+            parent_lay.addWidget(bar)
+            parent_lay.addSpacing(4)
+            return val, bar
+
+        # Left — Clears
+        left_lay = QVBoxLayout()
+        left_lay.setSpacing(2)
+        left_lay.setContentsMargins(0, 0, 20, 0)
+        left_lay.addWidget(section_label("CLEARS"))
+        left_lay.addSpacing(4)
+        self._sp_clears_lbl,  self._sp_clears_bar  = make_bar_metric(
+            left_lay, "Clears", "0", bar_max=100, bar_color=C["accent"]
+        )
+        self._sp_uptime_lbl,  self._sp_uptime_bar  = make_bar_metric(
+            left_lay, "Uptime", "00:00:00", bar_max=_UPTIME_CYCLE_SECS, bar_color=C["blue"]
+        )
+        left_lay.addStretch()
+
+        # Vertical separator
+        vline = QFrame()
+        vline.setFrameShape(QFrame.VLine)
+        vline.setFixedWidth(1)
+        vline.setStyleSheet(f"background: {C['border']}; border: none;")
+
+        # Right — Info
+        right_lay = QVBoxLayout()
+        right_lay.setSpacing(2)
+        right_lay.setContentsMargins(20, 0, 0, 0)
+        right_lay.addWidget(section_label("INFO"))
+        right_lay.addSpacing(4)
+        self._sp_last_clear_lbl = make_row(right_lay, "Last clear", "--")
+        self._sp_farming_lbl    = make_row(right_lay, "Farming", self.farmer["name"])
+        right_lay.addStretch()
+
+        outer.addLayout(left_lay, 2)
+        outer.addWidget(vline)
+        outer.addLayout(right_lay, 1)
+        return container
 
     def update_sa_chest_warning(self, chest_type):
         if self.sa_chest_warning_label is None:
@@ -1019,7 +1407,7 @@ class FarmerTab(QWidget):
                 if checked:
                     args.append(arg["name"])
             elif arg["type"] == "multiselect":
-                if selected := [item.text() for item in widget.selectedItems()]:
+                if selected := [cb.text() for cb in widget._checkboxes if cb.isChecked()]:
                     args.extend([arg["name"]] + selected)
             elif value := widget.text():
                 args.extend([arg["name"], value])
@@ -1040,6 +1428,18 @@ class FarmerTab(QWidget):
             if pw:
                 args.extend(["--password", pw])
         return args
+
+    def _cleanup_pause_flag(self):
+        """Remove the pause flag file for the current process, if it exists."""
+        if self.process is not None:
+            pid = self.process.processId()
+            if pid > 0:
+                flag_path = get_pause_flag_path(pid)
+                if os.path.exists(flag_path):
+                    try:
+                        os.remove(flag_path)
+                    except OSError:
+                        pass
 
     def start_farmer(self):
         if self.process is not None:
@@ -1074,11 +1474,44 @@ class FarmerTab(QWidget):
         # Capture both stdout and stderr
         self.process.setProcessChannelMode(QProcess.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
-        self.process.readyReadStandardError.connect(self.handle_stderr)
         self.process.finished.connect(self.process_finished)
 
         self.terminal.clear()
         self.output_lines = []
+
+        # Reset session progress
+        self._session_clears = 0
+        self._session_start_time = time.monotonic()
+        self._last_clear_time = None
+        # Read target clears from the arg widget (--clears or --num-clears)
+        self._session_max_clears = None
+        for arg in self.farmer["args"]:
+            if arg["name"] in ("--clears", "--num-clears") and arg["type"] == "text":
+                widget = self.arg_widgets.get(arg["name"])
+                if widget:
+                    val = widget.text().strip()
+                    if val and val.lower() != "inf":
+                        try:
+                            self._session_max_clears = int(val)
+                        except ValueError:
+                            pass
+                break
+        # Configure clears bar: fixed max or indeterminate (max=0)
+        if self._session_max_clears is not None:
+            self._sp_clears_bar.setMaximum(self._session_max_clears)
+        else:
+            self._sp_clears_bar.setMaximum(0)  # animated busy indicator
+        self._sp_clears_bar.setValue(0)
+        self._sp_clears_lbl.setText("0")
+
+        self._sp_uptime_lbl.setText("00:00:00")
+        self._sp_uptime_bar.setValue(0)
+        self._sp_last_clear_lbl.setText("--")
+        self._sp_farming_lbl.setText(self.farmer["name"])
+        if self._uptime_timer is None:
+            self._uptime_timer = QTimer(self)
+            self._uptime_timer.timeout.connect(self._update_session_progress)
+        self._uptime_timer.start(1000)
 
         # Start the process with -u flag for unbuffered output
         self.process.start(sys.executable, ["-u", script_path] + args)
@@ -1088,18 +1521,10 @@ class FarmerTab(QWidget):
         self.pause_btn.setText("PAUSE")
         self.paused = False
 
-        # Clean up any old pause flag for this PID
-        pid = self.process.processId()
-        if pid > 0:
-            flag_path = get_pause_flag_path(pid)
-            if os.path.exists(flag_path):
-                try:
-                    os.remove(flag_path)
-                except:
-                    pass  # Ignore cleanup errors
+        self._cleanup_pause_flag()
 
         self.append_terminal(
-            f"Started {self.farmer['name']} with:\n{' '.join([sys.executable, '-u', script_path]+display_args)}\n"
+            f"<color=#10b981>Started {self.farmer['name']} with:\n{' '.join([sys.executable, '-u', script_path]+display_args)}\n</color>"
         )
 
         # Add a timer to periodically check for output (in case of buffering issues)
@@ -1107,32 +1532,40 @@ class FarmerTab(QWidget):
         self.output_timer.timeout.connect(self.check_output)
         self.output_timer.start(100)  # Check every 100ms
 
-    def stop_farmer(self):
-        if self.process is not None:
-            # Clean up pause flag before stopping
-            pid = self.process.processId()
-            if pid > 0:
-                flag_path = get_pause_flag_path(pid)
-                if os.path.exists(flag_path):
-                    try:
-                        os.remove(flag_path)
-                    except:
-                        pass  # Ignore cleanup errors
+        if self._running_changed_cb:
+            self._running_changed_cb(True, self.process.processId())
 
-            with contextlib.suppress(Exception):
-                # Stop the output timer
-                if hasattr(self, "output_timer") and self.output_timer is not None:
-                    self.output_timer.stop()
-                    self.output_timer.deleteLater()
-                    self.output_timer = None
-                self.process.kill()
-            self.process = None
+    def _cleanup_output_timer(self):
+        if self.output_timer is not None:
+            self.output_timer.stop()
+            self.output_timer.deleteLater()
+            self.output_timer = None
+
+    def _reset_ui_after_stop(self):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.pause_btn.setEnabled(False)
         self.pause_btn.setText("PAUSE")
         self.paused = False
+        self._pause_start_time = None
+        if self._uptime_timer is not None:
+            self._uptime_timer.stop()
+        if self._session_max_clears is None:
+            self._sp_clears_bar.setMaximum(100)
+
+    def stop_farmer(self):
+        if self.process is not None:
+            self._cleanup_pause_flag()
+            try:
+                self._cleanup_output_timer()
+                self.process.kill()
+            except Exception:
+                pass
+            self.process = None
+        self._reset_ui_after_stop()
         self.append_terminal("\nProcess stopped.\n")
+        if self._running_changed_cb:
+            self._running_changed_cb(False, 0)
 
     def handle_stdout(self):
         if self.process is None:
@@ -1143,16 +1576,30 @@ class FarmerTab(QWidget):
         if lines:
             self.append_terminal("".join(lines))
 
-    def handle_stderr(self):
-        if self.process is None:
-            return
-        lines = []
-        while self.process.canReadLine():
-            lines.append(bytes(self.process.readLine()).decode("utf-8", errors="replace"))
-        if lines:
-            self.append_terminal("".join(lines))
+    def _append_terminal_centered(self, text):
+        """Insert text centered in the terminal (used for the initial welcome message)."""
+        self.output_lines.extend(text.splitlines(True))
+        cursor = self.terminal.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        block_fmt = QTextBlockFormat()
+        block_fmt.setAlignment(Qt.AlignCenter)
+        first = True
+        for line in text.splitlines():
+            if first:
+                cursor.setBlockFormat(block_fmt)
+                first = False
+            else:
+                cursor.insertBlock(block_fmt)
+            cursor.insertText(line.strip(), self._default_fmt)
+        self.terminal.setTextCursor(cursor)
+        self.terminal.ensureCursorVisible()
 
     def append_terminal(self, text):
+        # Check if this text contains a clear signal for the active farmer
+        if self._session_start_time is not None:
+            pattern = _CLEAR_RE.get(self.farmer.get("script", ""))
+            if pattern and pattern.search(text):
+                self._on_clear_detected()
         new_lines = text.splitlines(True)
         self.output_lines.extend(new_lines)
 
@@ -1165,17 +1612,37 @@ class FarmerTab(QWidget):
             # Append only the new lines (no clear/rebuild)
             self._render_lines(new_lines)
 
+    def _auto_line_color(self, line):
+        """Return a QColor for the line based on keyword rules, or None for default."""
+        for pattern, hex_color in self._LINE_COLOR_RULES:
+            if pattern.search(line):
+                return QColor(hex_color)
+        return None
+
     def _render_lines(self, lines):
         """Render the given lines at the end of the terminal widget."""
         cursor = self.terminal.textCursor()
         cursor.movePosition(QTextCursor.End)
 
-        for line in lines:
-            for segment_text, segment_color in self._parse_color_segments(line):
+        block_fmt = QTextBlockFormat()
+        block_fmt.setBottomMargin(1)
+
+        # Join first so multi-line <color=...> tags are parsed correctly
+        full_text = "".join(lines)
+
+        for segment_text, segment_color in self._parse_color_segments(full_text):
+            sub_lines = segment_text.split('\n')
+            for i, sub_line in enumerate(sub_lines):
                 fmt = QTextCharFormat(self._default_fmt)
                 if segment_color is not None:
                     fmt.setForeground(segment_color)
-                cursor.insertText(segment_text, fmt)
+                else:
+                    auto_color = self._auto_line_color(sub_line)
+                    if auto_color is not None:
+                        fmt.setForeground(auto_color)
+                cursor.insertText(sub_line, fmt)
+                if i < len(sub_lines) - 1:
+                    cursor.insertBlock(block_fmt)
 
         self.terminal.setTextCursor(cursor)
         self.terminal.ensureCursorVisible()
@@ -1208,30 +1675,13 @@ class FarmerTab(QWidget):
         return segments
 
     def process_finished(self):
-        # Clean up pause flag when process finishes
-        if self.process is not None:
-            pid = self.process.processId()
-            if pid > 0:
-                flag_path = get_pause_flag_path(pid)
-                if os.path.exists(flag_path):
-                    try:
-                        os.remove(flag_path)
-                    except:
-                        pass  # Ignore cleanup errors
-
-        # Stop the output timer
-        if hasattr(self, "output_timer") and self.output_timer is not None:
-            self.output_timer.stop()
-            self.output_timer.deleteLater()
-            self.output_timer = None
-
+        self._cleanup_pause_flag()
+        self._cleanup_output_timer()
         self.process = None
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.pause_btn.setEnabled(False)
-        self.pause_btn.setText("PAUSE")
-        self.paused = False
+        self._reset_ui_after_stop()
         self.append_terminal("\nProcess finished.\n")
+        if self._running_changed_cb:
+            self._running_changed_cb(False, 0)
 
     def check_output(self):
         if self.process is None:
@@ -1242,7 +1692,36 @@ class FarmerTab(QWidget):
     def clear_output(self):
         self.terminal.clear()
         self.output_lines = []
+        if self._session_start_time is not None:
+            self._session_start_time = time.monotonic()
+            self._sp_uptime_lbl.setText("00:00:00")
+            self._sp_uptime_bar.setValue(0)
         self.append_terminal("\nOutput cleared.\n")
+
+    def _on_clear_detected(self):
+        """Called when the active farmer's clear pattern is found in stdout."""
+        self._session_clears += 1
+        self._last_clear_time = datetime.datetime.now()
+        count_str = str(self._session_clears)
+        self._sp_clears_lbl.setText(count_str)
+        self._sp_last_clear_lbl.setText(self._last_clear_time.strftime("%H:%M:%S"))
+        if self._session_max_clears is not None:
+            self._sp_clears_bar.setValue(min(self._session_clears, self._session_max_clears))
+
+    def _update_session_progress(self):
+        """Ticked every second by _uptime_timer to refresh time-based stats."""
+        if self._session_start_time is None:
+            return
+        elapsed = int(time.monotonic() - self._session_start_time)
+
+        # Uptime string
+        h, rem = divmod(elapsed, 3600)
+        m, s = divmod(rem, 60)
+        uptime_str = f"{h:02d}:{m:02d}:{s:02d}"
+        self._sp_uptime_lbl.setText(uptime_str)
+
+        # Progress bars
+        self._sp_uptime_bar.setValue(elapsed % _UPTIME_CYCLE_SECS)    # rolling progress every 720 min
 
     def resize_window(self):
         """Resize the 7DS window to the required size"""
@@ -1256,7 +1735,7 @@ class FarmerTab(QWidget):
                     f"[SUCCESS] 7DS window resized successfully! Screenshot shape: {screenshot_shape}\n"
                 )
             except Exception as e:
-                self.append_terminal(f"[SUCCESS] 7DS window resized successfully!\n")
+                self.append_terminal(f"[SUCCESS] 7DS window resized successfully! (could not read shape: {e})\n")
         else:
             self.append_terminal("[WARNING] Failed to resize 7DS window. Continuing with current window size...\n")
         # Small delay to allow window resize to complete
@@ -1276,8 +1755,11 @@ class FarmerTab(QWidget):
                 with open(flag_path, "w") as f:
                     f.write("")  # Create empty flag file
                 self.paused = True
+                self._pause_start_time = time.monotonic()
+                if self._uptime_timer is not None:
+                    self._uptime_timer.stop()
                 self.pause_btn.setText("RESUME")
-                self.append_terminal(f"[PAUSED] Created pause flag at {flag_path}\n")
+                self.append_terminal(f"<color=#f59e0b>[PAUSED] Created pause flag at {flag_path}\n</color>")
             except Exception as e:
                 self.append_terminal(f"[ERROR] Failed to create pause flag: {e}\n")
         else:
@@ -1287,8 +1769,13 @@ class FarmerTab(QWidget):
                 if os.path.exists(flag_path):
                     os.remove(flag_path)
                 self.paused = False
+                if self._pause_start_time is not None and self._session_start_time is not None:
+                    self._session_start_time += time.monotonic() - self._pause_start_time
+                    self._pause_start_time = None
+                if self._uptime_timer is not None:
+                    self._uptime_timer.start(1000)
                 self.pause_btn.setText("PAUSE")
-                self.append_terminal(f"[RESUMED] Removed pause flag\n")
+                self.append_terminal(f"<color=#10b981>[RESUMED] Removed pause flag\n</color>")
             except Exception as e:
                 self.append_terminal(f"[ERROR] Failed to remove pause flag: {e}\n")
 
@@ -1299,13 +1786,13 @@ class FarmerTab(QWidget):
         if image_filename is None:
             return
 
-        image_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gui_images", image_filename)
+        image_path = os.path.join(_GUI_IMAGES_DIR, image_filename)
         if os.path.exists(image_path):
             pixmap = QPixmap(image_path)
             if not pixmap.isNull():
                 scaled = pixmap.scaled(*self.image_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.image_label.setPixmap(scaled)
-                self.image_label.setStyleSheet("border: 1px solid #aaa;")
+                self.image_label.setStyleSheet("border: 1px solid #252535; border-radius: 5px;")
             else:
                 self.image_label.setText(f"Failed to load image:\n{image_filename}")
         else:
@@ -1327,196 +1814,550 @@ class FarmerTab(QWidget):
         self.load_farmer_image(image)
 
 
-PAGE_ABOUT = "about"
-PAGE_SETTINGS = "settings"
-PAGE_ID_ROLE = Qt.UserRole
+# Tile Widget
+def _rounded_pixmap(pixmap: QPixmap, radius: int) -> QPixmap:
+    """Return a copy of pixmap with only the top corners rounded."""
+    w, h = pixmap.width(), pixmap.height()
+    image = QImage(w, h, QImage.Format_ARGB32_Premultiplied)
+    image.fill(Qt.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.Antialiasing)
+    path = QPainterPath()
+    path.moveTo(radius, 0)
+    path.lineTo(w - radius, 0)
+    path.quadTo(w, 0, w, radius)   # top-right
+    path.lineTo(w, h)
+    path.lineTo(0, h)
+    path.lineTo(0, radius)
+    path.quadTo(0, 0, radius, 0)   # top-left
+    path.closeSubpath()
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.end()
+    return QPixmap.fromImage(image)
+
+
+class FarmerTile(QFrame):
+    clicked = pyqtSignal(str)
+
+    _TILE_W = 200
+    _IMG_H = 112  # 16:9
+
+    def __init__(self, farmer, parent=None):
+        super().__init__(parent)
+        self.farmer_name = farmer["name"]
+        self.setFixedWidth(self._TILE_W)
+        self.setCursor(Qt.PointingHandCursor)
+        self._set_style(running=False)
+        self._init_ui(farmer)
+
+    def _set_style(self, running: bool):
+        border = "#10b981" if running else C['border']
+        hover_border = "#10b981" if running else C['accent']
+        self.setStyleSheet(f"""
+            FarmerTile {{
+                background: {C['tile_bg']};
+                border: 2px solid {border};
+                border-radius: 8px;
+            }}
+            FarmerTile:hover {{
+                border-color: {hover_border};
+                background: {C['tile_hover']};
+            }}
+        """)
+
+    def _init_ui(self, farmer):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Image wrapper
+        img_wrapper = QWidget()
+        img_wrapper.setFixedHeight(self._IMG_H)
+        img_wrapper.setStyleSheet(f"background: {C['panel2']}; border-radius: 8px 8px 0 0;")
+        img_wr_lay = QVBoxLayout(img_wrapper)
+        img_wr_lay.setContentsMargins(0, 0, 0, 0)
+
+        _img_w = self._TILE_W - 4  # tile border is 2px on each side
+        self.img_label = QLabel()
+        self.img_label.setAlignment(Qt.AlignCenter)
+        self.img_label.setFixedSize(_img_w, self._IMG_H)
+        self.img_label.setStyleSheet("background: transparent;")
+        img_wr_lay.addWidget(self.img_label, 0, Qt.AlignCenter)
+        layout.addWidget(img_wrapper)
+
+        # Load image
+        image_filename = FARMER_IMAGES.get(farmer["name"])
+        if image_filename:
+            image_path = os.path.join(_GUI_IMAGES_DIR, image_filename)
+            if os.path.exists(image_path):
+                pixmap = QPixmap(image_path)
+                if not pixmap.isNull():
+                    scaled = pixmap.scaled(
+                        _img_w, self._IMG_H,
+                        Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+                    )
+                    x = max(0, (scaled.width() - _img_w) // 2)
+                    y = max(0, (scaled.height() - self._IMG_H) // 2)
+                    cropped = scaled.copy(x, y, _img_w, self._IMG_H)
+                    self.img_label.setPixmap(_rounded_pixmap(cropped, 9))
+
+        # Body
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        body_lay = QVBoxLayout(body)
+        body_lay.setContentsMargins(8, 20, 8, 8)
+        body_lay.setSpacing(2)
+
+        name_label = QLabel(farmer["name"])
+        name_label.setStyleSheet(
+            f"font-size: 15px; font-weight: 600; color: {C['text']};"
+        )
+        name_label.setWordWrap(True)
+        name_label.setAlignment(Qt.AlignCenter)
+        body_lay.addWidget(name_label)
+
+        status_row = QHBoxLayout()
+        status_row.setSpacing(4)
+        status_row.setContentsMargins(0, 0, 0, 0)
+        self.status_dot = QLabel("●")
+        self.status_dot.setStyleSheet("color: #252535; font-size: 8px;")
+        self.status_dot.hide()
+        self.status_text = QLabel("")
+        self.status_text.setStyleSheet("font-size: 10px; color: #3f3f5a;")
+        status_row.addStretch(1)
+        status_row.addWidget(self.status_dot)
+        status_row.addWidget(self.status_text)
+        status_row.addStretch(1)
+        body_lay.addLayout(status_row)
+
+        layout.addWidget(body)
+
+    def set_running(self, running: bool):
+        self._set_style(running)
+        if running:
+            self.status_dot.setStyleSheet("color: #10b981; font-size: 8px;")
+            self.status_dot.show()
+            self.status_text.setStyleSheet("font-size: 10px; color: #10b981;")
+            self.status_text.setText("Running")
+        else:
+            self.status_dot.hide()
+            self.status_text.setText("")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self.farmer_name)
+        super().mousePressEvent(event)
+
+
+# Grid View
+
+class GridView(QWidget):
+    farmer_selected = pyqtSignal(str)
+
+    _COLS = 5
+
+    def __init__(self, farmers, parent=None):
+        super().__init__(parent)
+        self._tiles: dict = {}
+        self._init_ui(farmers)
+
+    def _init_ui(self, farmers):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {C['bg']}; }}")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # Build rows of tiles, each row centered with stretches
+        container = QWidget()
+        container.setStyleSheet(f"background: {C['bg']};")
+        v_lay = QVBoxLayout(container)
+        v_lay.setContentsMargins(0, 24, 0, 24)
+        v_lay.setSpacing(9)
+
+        rows = [farmers[i:i + self._COLS] for i in range(0, len(farmers), self._COLS)]
+        for row_farmers in rows:
+            row = QHBoxLayout()
+            row.setSpacing(9)
+            row.addStretch(1)
+            for farmer in row_farmers:
+                tile = FarmerTile(farmer)
+                tile.clicked.connect(self.farmer_selected)
+                self._tiles[farmer["name"]] = tile
+                row.addWidget(tile)
+            row.addStretch(1)
+            v_lay.addLayout(row)
+
+        v_lay.addStretch(1)
+
+        scroll.setWidget(container)
+        outer.addWidget(scroll)
+
+    def filter(self, text: str):
+        lower = text.strip().lower()
+        for name, tile in self._tiles.items():
+            tile.setVisible(not lower or lower in name.lower())
+
+    def set_running(self, farmer_name: str, running: bool):
+        if farmer_name in self._tiles:
+            self._tiles[farmer_name].set_running(running)
+
+
+# Detail View 
+
+class DetailView(QWidget):
+    """Wraps a FarmerTab with the detail bar (← Back + name + running status)."""
+
+    def __init__(self, farmer, password_supplier, back_callback, running_changed=None, parent=None):
+        super().__init__(parent)
+        self._back = back_callback
+        self._running_changed_ext = running_changed
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # ── Detail bar ──
+        detail_bar = QWidget()
+        detail_bar.setFixedHeight(40)
+        detail_bar.setStyleSheet(
+            f"background: {C['panel']}; border-bottom: 1px solid {C['border']};"
+        )
+        bar_lay = QHBoxLayout(detail_bar)
+        bar_lay.setContentsMargins(18, 0, 18, 0)
+        bar_lay.setSpacing(12)
+
+        back_btn = QPushButton("← Back")
+        back_btn.setStyleSheet(_BTN_BACK_STYLE)
+        back_btn.clicked.connect(back_callback)
+        bar_lay.addWidget(back_btn)
+
+        name_lbl = QLabel(farmer["name"])
+        name_lbl.setStyleSheet(f"font-size: 15px; font-weight: 700; color: {C['text']};")
+        bar_lay.addWidget(name_lbl)
+
+        bar_lay.addStretch(1)
+
+        self.running_lbl = QLabel("")
+        self.running_lbl.setStyleSheet("font-size: 13px; color: #10b981;")
+        bar_lay.addWidget(self.running_lbl)
+
+        layout.addWidget(detail_bar)
+
+        # ── FarmerTab ──
+        self.farmer_tab = FarmerTab(
+            farmer,
+            password_supplier=password_supplier,
+            running_changed_cb=self._on_running_changed,
+        )
+        layout.addWidget(self.farmer_tab, 1)
+
+    def _on_running_changed(self, running: bool, pid: int):
+        if running:
+            self.running_lbl.setText("● Running")
+        else:
+            self.running_lbl.setText("")
+        if self._running_changed_ext:
+            self._running_changed_ext(running)
+
+
+# List View
+
+class ListView(QWidget):
+    """Sidebar list + right content panel (alternative to grid)."""
+
+    def __init__(self, farmers, password_supplier, parent=None):
+        super().__init__(parent)
+        self._farmers = farmers
+        self._password_supplier = password_supplier
+        self._farmer_tabs: dict = {}
+        self._list_rows: dict = {}  # farmer_name → row index in QListWidget
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # ── Left sidebar ──
+        sidebar = QWidget()
+        sidebar.setFixedWidth(230)
+        sidebar.setStyleSheet(
+            f"background: {C['panel']}; border-right: 1px solid {C['border']};"
+        )
+        sidebar_lay = QVBoxLayout(sidebar)
+        sidebar_lay.setContentsMargins(0, 8, 0, 8)
+        sidebar_lay.setSpacing(0)
+
+        self._list = QListWidget()
+        self._list.setStyleSheet(
+            "QListWidget { background: transparent; border: none; outline: none; font-size: 13px; }"
+            f"QListWidget::item {{ color: {C['dim']}; padding: 9px 16px; }}"
+            f"QListWidget::item:selected {{ background: {C['panel2']};"
+            f"  border-left: 3px solid {C['accent']}; padding-left: 13px; }}"
+            f"QListWidget::item:hover:!selected {{ background: {C['panel3']}; }}"
+        )
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # Row 0: About
+        self._list.addItem(QListWidgetItem("  About"))
+
+        # Rows 1+: farmers
+        for i, farmer in enumerate(self._farmers):
+            item = QListWidgetItem("  " + farmer["name"])
+            self._list.addItem(item)
+            self._list_rows[farmer["name"]] = i + 1
+
+        self._list.currentRowChanged.connect(self._on_row_changed)
+        sidebar_lay.addWidget(self._list)
+        layout.addWidget(sidebar)
+
+        # ── Right content stack ──
+        self._stack = QStackedWidget()
+        self._stack.setStyleSheet(f"background: {C['bg']};")
+
+        # Index 0: About
+        self._about_tab = AboutTab()
+        about_scroll = QScrollArea()
+        about_scroll.setWidgetResizable(True)
+        about_scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {C['bg']}; }}")
+        about_scroll.setWidget(self._about_tab)
+        self._stack.addWidget(about_scroll)
+
+        # Indices 1+: FarmerTabs
+        for farmer in self._farmers:
+            tab = FarmerTab(
+                farmer,
+                password_supplier=self._password_supplier,
+                running_changed_cb=lambda running, pid, n=farmer["name"]: self._on_running_changed(n, running),
+            )
+            self._stack.addWidget(tab)
+            self._farmer_tabs[farmer["name"]] = tab
+
+        layout.addWidget(self._stack, 1)
+
+        self._list.setCurrentRow(0)
+
+    def _on_row_changed(self, row):
+        if row >= 0:
+            self._stack.setCurrentIndex(row)
+
+    def _on_running_changed(self, name: str, running: bool):
+        row = self._list_rows.get(name)
+        if row is None:
+            return
+        item = self._list.item(row)
+        if item is None:
+            return
+        if running:
+            item.setText("●  " + name)
+            item.setForeground(QColor(C['running']))
+        else:
+            item.setText("  " + name)
+            item.setForeground(QColor(C['dim']))
+
+    def show_about(self):
+        self._list.setCurrentRow(0)
+
+
+# Main Window
+
+_BTN_BACK_STYLE = f"""
+    QPushButton {{
+        background: {C['btn_sec_bg']};
+        border: 1px solid {C['border2']};
+        border-radius: 6px;
+        color: {C['btn_sec_text']};
+        padding: 4px 13px;
+        font-size: 13px;
+    }}
+    QPushButton:hover {{ border-color: {C['accent']}; background: {C['panel2']}; }}
+    QPushButton:pressed {{ background: {C['btn_sec_bg']}; border-color: {C['accent']}; }}
+"""
+
+_BTN_TOP_STYLE = f"""
+    QPushButton {{
+        background: {C['btn_sec_bg']};
+        border: 1px solid {C['border2']};
+        border-radius: 6px;
+        color: {C['btn_sec_text']};
+        padding: 6px 16px;
+        font-size: 13px;
+    }}
+    QPushButton:hover {{ border-color: {C['accent']}; background: {C['panel2']}; }}
+    QPushButton:pressed {{ background: {C['btn_sec_bg']}; border-color: {C['accent']}; }}
+"""
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AutoFarmers - 7DS Grand Cross")
-        self.setGeometry(100, 100, 1150, 680)
+        self.setGeometry(100, 100, 1200, 700)
 
-        self._farmer_tabs = {}
+        self._detail_views: dict = {}
         self._farmer_by_name = {f["name"]: f for f in FARMERS}
 
         self.about_tab = AboutTab()
         self.settings_tab = SettingsTab()
 
-        self.stack = QStackedWidget()
-        self.stack.addWidget(self.about_tab)
-        self.stack.addWidget(self.settings_tab)
-
-        self.page_combo = QComboBox()
-        self.page_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.page_combo.setMinimumContentsLength(28)
-
-        self.sidebar_search = QLineEdit()
-        self.sidebar_search.setPlaceholderText("Search…")
-        self.sidebar_list = QListWidget()
-
-        self._build_page_selector_items()
-
-        self._splitter = QSplitter(Qt.Horizontal)
-        self._sidebar_last_width = 240
-
-        self.sidebar_toggle = QToolButton()
-        self.sidebar_toggle.setText("Pages")
-        self.sidebar_toggle.setCheckable(True)
-        self.sidebar_toggle.setToolTip(
-            "Show or hide the searchable page list (optional; the Page menu above is enough for daily use)."
-        )
-
         central = QWidget()
-        root_layout = QVBoxLayout(central)
-        root_layout.setContentsMargins(8, 8, 8, 8)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        header = QHBoxLayout()
-        header.addWidget(QLabel("Page:"))
-        header.addWidget(self.page_combo, 1)
-        header.addWidget(self.sidebar_toggle)
-        root_layout.addLayout(header)
+        # ── Top bar ──
+        top_bar = QWidget()
+        top_bar.setFixedHeight(56)
+        top_bar.setStyleSheet(
+            f"background: {C['panel']}; border-bottom: 2px solid {C['border']};"
+        )
+        top_lay = QHBoxLayout(top_bar)
+        top_lay.setContentsMargins(20, 0, 20, 0)
+        top_lay.setSpacing(14)
 
-        sidebar = QWidget()
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(0, 0, 0, 0)
-        sidebar_layout.addWidget(self.sidebar_search)
-        sidebar_layout.addWidget(self.sidebar_list, 1)
-        self._splitter.addWidget(sidebar)
-        self._splitter.addWidget(self.stack)
-        self._splitter.setStretchFactor(0, 0)
-        self._splitter.setStretchFactor(1, 1)
-        self._splitter.setCollapsible(0, True)
-        self._splitter.setCollapsible(1, False)
+        logo = QLabel()
+        logo.setText(
+            f'<span style="font-size:19px;font-weight:800;color:{C["text"]};">Auto</span>'
+            f'<span style="font-size:19px;font-weight:800;color:{C["accent"]};">Farmers</span>'
+        )
+        logo.setTextFormat(Qt.RichText)
+        top_lay.addWidget(logo)
 
-        root_layout.addWidget(self._splitter, 1)
+        top_lay.addStretch(1)
 
-        self.sidebar_toggle.toggled.connect(self._on_sidebar_toggle_toggled)
-        self._splitter.splitterMoved.connect(self._on_splitter_moved)
-        self.sidebar_toggle.setChecked(False)
-        self._splitter.setSizes([0, 1000])
+        self._view_toggle_btn = QPushButton("☰  List")
+        self._view_toggle_btn.setStyleSheet(_BTN_TOP_STYLE)
+        self._view_toggle_btn.clicked.connect(self._toggle_view)
+        top_lay.addWidget(self._view_toggle_btn)
 
-        self.page_combo.currentIndexChanged.connect(self._on_combo_index_changed)
-        self.sidebar_list.itemClicked.connect(self._on_sidebar_item_clicked)
-        self.sidebar_search.textChanged.connect(self._on_sidebar_filter_changed)
+        _theme_label = "☀  Light" if _ACTIVE_THEME == "dark" else "🌙  Dark"
+        self._theme_btn = QPushButton(_theme_label)
+        self._theme_btn.setStyleSheet(_BTN_TOP_STYLE)
+        self._theme_btn.clicked.connect(self._toggle_theme)
+        top_lay.addWidget(self._theme_btn)
 
-        self.setCentralWidget(central)
-        self.page_combo.blockSignals(True)
-        self.page_combo.setCurrentIndex(0)
-        self.page_combo.blockSignals(False)
-        self._show_page_for_id(PAGE_ABOUT)
-        self._sync_sidebar_selection(PAGE_ABOUT)
+        settings_btn = QPushButton("⚙ Settings")
+        settings_btn.setStyleSheet(_BTN_TOP_STYLE)
+        settings_btn.clicked.connect(lambda: self._show_page("settings"))
+        top_lay.addWidget(settings_btn)
 
-    def _on_sidebar_toggle_toggled(self, visible):
-        sizes = self._splitter.sizes()
-        total = sum(sizes) if sizes else max(self._splitter.width(), 800)
-        if visible:
-            w = max(min(self._sidebar_last_width, total // 2), 180)
-            self._splitter.setSizes([w, max(total - w, 200)])
-        else:
-            if sizes and sizes[0] > 0:
-                self._sidebar_last_width = max(sizes[0], 180)
-            self._splitter.setSizes([0, total])
+        about_btn = QPushButton("ℹ About")
+        about_btn.setStyleSheet(_BTN_TOP_STYLE)
+        about_btn.clicked.connect(lambda: self._show_page("about"))
+        top_lay.addWidget(about_btn)
 
-    def _on_splitter_moved(self, pos, index):
-        del pos, index
-        sizes = self._splitter.sizes()
-        if not sizes:
-            return
-        open_ = sizes[0] > 20
-        if open_:
-            self._sidebar_last_width = max(sizes[0], 180)
-        if self.sidebar_toggle.isChecked() != open_:
-            self.sidebar_toggle.blockSignals(True)
-            self.sidebar_toggle.setChecked(open_)
-            self.sidebar_toggle.blockSignals(False)
-            if not open_:
-                total = sum(sizes)
-                self._splitter.setSizes([0, max(total, 200)])
+        root.addWidget(top_bar)
 
-    def _build_page_selector_items(self):
-        """Fill combo and sidebar list with the same page ids (UserRole / itemData)."""
-        self.page_combo.blockSignals(True)
-        self.page_combo.clear()
-        self.sidebar_list.clear()
+        # ── Stacked views ──
+        self.stack = QStackedWidget()
+        self.stack.setStyleSheet(f"QStackedWidget {{ background: {C['bg']}; }}")
 
-        def add_page(label, page_id):
-            self.page_combo.addItem(label, page_id)
-            item = QListWidgetItem(label)
-            item.setData(PAGE_ID_ROLE, page_id)
-            self.sidebar_list.addItem(item)
+        self.grid_view = GridView(FARMERS)
+        self.grid_view.farmer_selected.connect(self._on_farmer_selected)
 
-        add_page("About", PAGE_ABOUT)
-        add_page("Settings", PAGE_SETTINGS)
-        for farmer in FARMERS:
-            add_page(farmer["name"], farmer["name"])
-
-        self.page_combo.blockSignals(False)
-
-    def _index_for_page_id(self, page_id):
-        for i in range(self.page_combo.count()):
-            if self.page_combo.itemData(i) == page_id:
-                return i
-        return -1
-
-    def _on_combo_index_changed(self, index):
-        if index < 0:
-            return
-        page_id = self.page_combo.itemData(index)
-        self._show_page_for_id(page_id)
-        self._sync_sidebar_selection(page_id)
-
-    def _on_sidebar_item_clicked(self, item):
-        page_id = item.data(PAGE_ID_ROLE)
-        idx = self._index_for_page_id(page_id)
-        if idx >= 0:
-            self.page_combo.setCurrentIndex(idx)
-
-    def _on_sidebar_filter_changed(self, text):
-        needle = text.casefold().strip()
-        for i in range(self.sidebar_list.count()):
-            item = self.sidebar_list.item(i)
-            label = item.text().casefold()
-            item.setHidden(bool(needle) and needle not in label)
-        page_id = self.page_combo.currentData()
-        if page_id is not None:
-            self._sync_sidebar_selection(page_id)
-
-    def _sync_sidebar_selection(self, page_id):
-        for i in range(self.sidebar_list.count()):
-            item = self.sidebar_list.item(i)
-            if item.data(PAGE_ID_ROLE) == page_id:
-                if not item.isHidden():
-                    self.sidebar_list.setCurrentItem(item)
-                    self.sidebar_list.scrollToItem(item)
-                else:
-                    self.sidebar_list.clearSelection()
-                return
-
-    def _show_page_for_id(self, page_id):
-        if page_id == PAGE_ABOUT:
-            self.stack.setCurrentWidget(self.about_tab)
-        elif page_id == PAGE_SETTINGS:
-            self.stack.setCurrentWidget(self.settings_tab)
-        else:
-            self.stack.setCurrentWidget(self._ensure_farmer_tab(page_id))
-
-    def _ensure_farmer_tab(self, name):
-        if name in self._farmer_tabs:
-            return self._farmer_tabs[name]
-        farmer_def = self._farmer_by_name[name]
-        tab = FarmerTab(
-            farmer_def,
+        self.list_view = ListView(
+            FARMERS,
             password_supplier=lambda: self.settings_tab.password_edit.text(),
         )
-        self.stack.addWidget(tab)
-        self._farmer_tabs[name] = tab
-        return tab
+
+        self.about_wrapper = self._wrap_with_back_bar(self.about_tab, "About")
+        self.settings_wrapper = self._wrap_with_back_bar(self.settings_tab, "Settings")
+
+        self.stack.addWidget(self.grid_view)
+        self.stack.addWidget(self.list_view)
+        self.stack.addWidget(self.about_wrapper)
+        self.stack.addWidget(self.settings_wrapper)
+
+        root.addWidget(self.stack, 1)
+        self.setCentralWidget(central)
+
+        self.stack.setCurrentWidget(self.grid_view)
+
+    def _wrap_with_back_bar(self, page_widget: QWidget, title: str = "") -> QWidget:
+        wrapper = QWidget()
+        lay = QVBoxLayout(wrapper)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        back_bar = QWidget()
+        back_bar.setFixedHeight(40)
+        back_bar.setStyleSheet(f"background: {C['panel']}; border-bottom: 1px solid {C['border']};")
+        bar_lay = QHBoxLayout(back_bar)
+        bar_lay.setContentsMargins(18, 0, 18, 0)
+        bar_lay.setSpacing(12)
+
+        back_btn = QPushButton("← Back")
+        back_btn.setStyleSheet(_BTN_BACK_STYLE)
+        back_btn.clicked.connect(self._show_grid)
+        bar_lay.addWidget(back_btn)
+        if title:
+            title_lbl = QLabel(title)
+            title_lbl.setStyleSheet(f"font-size: 15px; font-weight: 700; color: {C['text']};")
+            bar_lay.addWidget(title_lbl)
+        bar_lay.addStretch(1)
+
+        lay.addWidget(back_bar)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {C['bg']}; }}")
+        scroll.setWidget(page_widget)
+        lay.addWidget(scroll, 1)
+
+        return wrapper
+
+    def _on_farmer_selected(self, name: str):
+        view = self._ensure_detail_view(name)
+        self.stack.setCurrentWidget(view)
+
+    def _show_page(self, page_id: str):
+        if page_id == "about":
+            self.stack.setCurrentWidget(self.about_wrapper)
+        elif page_id == "settings":
+            self.stack.setCurrentWidget(self.settings_wrapper)
+        else:
+            self._show_grid()
+
+    def _toggle_theme(self):
+        _save_theme("light" if _ACTIVE_THEME == "dark" else "dark")
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    def _toggle_view(self):
+        if self.stack.currentWidget() is self.list_view:
+            self._view_toggle_btn.setText("☰  List")
+            self.stack.setCurrentWidget(self.grid_view)
+        else:
+            self._view_toggle_btn.setText("⊞  Grid")
+            self.list_view.show_about()
+            self.stack.setCurrentWidget(self.list_view)
+
+    def _show_grid(self):
+        self.stack.setCurrentWidget(self.grid_view)
+        self._view_toggle_btn.setText("☰  List")
+
+    def _ensure_detail_view(self, name: str) -> "DetailView":
+        if name in self._detail_views:
+            return self._detail_views[name]
+        farmer_def = self._farmer_by_name[name]
+        view = DetailView(
+            farmer_def,
+            password_supplier=lambda: self.settings_tab.password_edit.text(),
+            back_callback=self._show_grid,
+            running_changed=lambda running, n=name: self.grid_view.set_running(n, running),
+        )
+        self.stack.addWidget(view)
+        self._detail_views[name] = view
+        return view
 
 
 def main():
     app = QApplication(sys.argv)
+    app.setStyleSheet(APP_STYLESHEET)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
