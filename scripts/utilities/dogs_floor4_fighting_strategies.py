@@ -215,7 +215,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             ]
             if len(attack_debuff_ids) > 0:
                 hand_of_cards[attack_debuff_ids[-1]].card_type = CardTypes.GROUND
-                print(f"Disabling one stance cancel {hand_of_cards[attack_debuff_ids[-1]].card_name}!")
+                print("Disabling one stance cancel card.")
 
         # Do not play Nasiens ult: mark it GROUND so SmarterBattleStrategy skips it (same idea as Escalin above).
         for i in nasiens_ids:
