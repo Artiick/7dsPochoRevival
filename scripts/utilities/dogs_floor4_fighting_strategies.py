@@ -204,16 +204,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             print("Moving Nasiens card to get ult...")
             return [nasiens_ids[-1], nasiens_ids[-1] + 1]
 
-        # On even turns, we have to play a stance cancel.
-        # On odd turns, we have to disable it.
-        for i, card in enumerate(hand_of_cards):
-            if card.card_type == CardTypes.ATTACK_DEBUFF:
-                if IBattleStrategy.fight_turn % 2 == 0:
-                    print(f"Playing stance cancel {card.card_name}!")
-                    return i
-                else:
-                    hand_of_cards[i].card_type = CardTypes.GROUND
-                    print(f"Disabling stance cancel {card.card_name}!")
+        # On even turns, we have to disable stance cancel cards!
+        if IBattleStrategy.fight_turn % 2 == 0:
+            attack_debuff_ids = self._tr(hand_of_cards, ("attack_debuff",), (CardRanks.SILVER, CardRanks.GOLD))
+            if attack_debuff_ids.size > 0:
+                hand_of_cards[attack_debuff_ids[-1]].card_type = CardTypes.GROUND
+                print(f"Disabling one stance cancel {hand_of_cards[attack_debuff_ids[-1]].card_name}!")
 
         # Do not play Nasiens ult: mark it GROUND so SmarterBattleStrategy skips it (same idea as Escalin above).
         for i in nasiens_ids:
