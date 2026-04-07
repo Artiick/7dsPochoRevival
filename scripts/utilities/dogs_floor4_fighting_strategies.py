@@ -197,26 +197,19 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         nasiens_ids = self._matching_card_ids(hand_of_cards, NASI_TEMPLATES)
         has_nasiens_ult = any(self._card_matches_any(hand_of_cards[i], ("nasi_ult",)) for i in nasiens_ids)
-        escalin_ids = self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES)
 
-        nas_stuns = self._matching_card_ids(hand_of_cards, ("nasi_stun",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
-        played_nas_stuns = bool(
-            self._matching_card_ids(picked_cards, ("nasi_stun",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
-        )
         # If we still have no nasi_ult in hand (has_nasiens_ult was false at start of this pick) and we are on
         # the 3rd+ card of the turn, try to reshuffle: move the first non-GROUND Nasiens card one slot right.
         if card_turn == 0 and not has_nasiens_ult and len(nasiens_ids) > 0:
             print("Moving Nasiens card to get ult...")
             return [nasiens_ids[-1], nasiens_ids[-1] + 1]
 
-        if len(nas_stuns) > 0 and not played_nas_stuns:
-            return nas_stuns[-1]
-
-        # # Pick at most one Escalin card -- Only in non-Lillia teams, because Lillia's damage is a**
-        # if not type(self).lillia_in_team and bool(self._matching_card_ids(picked_cards, ESCALIN_TEMPLATES)):
-        #     for i in escalin_ids:
-        #         print("Disabling Escalin cards")
-        #         hand_of_cards[i].card_type = CardTypes.DISABLED
+        # On even turns, we have to play a stance cancel
+        if IBattleStrategy.fight_turn % 2 == 0:
+            for i, card in enumerate(hand_of_cards):
+                if card.card_type == CardTypes.ATTACK_DEBUFF:
+                    hand_of_cards[i].card_type = CardTypes.GROUND
+                    return i
 
         # Do not play Nasiens ult: mark it GROUND so SmarterBattleStrategy skips it (same idea as Escalin above).
         for i in nasiens_ids:
@@ -243,7 +236,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         self._maybe_reset("phase_3")
 
         print(f"Phase 3: fight turn {IBattleStrategy.fight_turn}")
-        if IBattleStrategy.fight_turn % 2 == 0:
+        if IBattleStrategy.fight_turn % 2 == 0 and card_turn == 0:
             print("Dog is putting up a taunt...")
             DogsFloor4BattleStrategy.taunt_removed = False
 
