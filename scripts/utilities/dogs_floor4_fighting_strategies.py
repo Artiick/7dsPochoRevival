@@ -342,6 +342,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 and card_turn == 0
             ):
                 print("Phase 3: activating Escalin talent!")
+                DogsFloor4BattleStrategy.taunt_removed = True
                 time.sleep(2.5)
 
             if played_st_gauge_ids.size == 1:
