@@ -20,8 +20,9 @@ import os
 import re
 import sys
 import time
+from dataclasses import dataclass
 
-from PyQt5.QtCore import QProcess, QProcessEnvironment, Qt, QTimer, QUrl, pyqtSignal
+from PyQt5.QtCore import QObject, QProcess, QProcessEnvironment, Qt, QTimer, QUrl, pyqtSignal
 from PyQt5.QtGui import (
     QColor,
     QDesktopServices,
@@ -48,6 +49,7 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -613,6 +615,8 @@ _UPTIME_CYCLE_SECS = 12 * 3600  # Session uptime bar resets every 12 hours
 # Maps each farmer script to the stdout pattern that signals one clear completed.
 # Patterns are taken directly from the print() calls in each farming logic file.
 _CLEAR_RE: dict[str, re.Pattern] = {
+    # Demon farmer: demon_farming_logic.py:362
+    "DemonFarmer.py":         re.compile(r"We've destroyed \d+/\d+(?: Indura)? demons \([\d.]+%\)\."),
     # Demonic Beast farmers (floor 3 = full cycle): demonic_beast_farming_logic.py:302
     "BirdFarmer.py":          re.compile(r"Floor 3 complete!"),
     "DeerFarmer.py":          re.compile(r"Floor 3 complete!"),
@@ -638,6 +642,392 @@ _CLEAR_RE: dict[str, re.Pattern] = {
     # Guild Boss: guild_boss_farming_logic.py:111 (logger → merged channels)
     "GuildBossFarmer.py":     re.compile(r"Did \d+ runs\. Re-starting the fight!"),
 }
+
+
+def get_clear_pattern(script_name: str) -> re.Pattern | None:
+    return _CLEAR_RE.get(script_name)
+
+
+@dataclass(frozen=True)
+class FarmerStatusSnapshot:
+    display_name: str
+    is_running: bool
+    is_paused: bool
+    process_id: int
+    session_clears: int
+    session_max_clears: int | None
+    session_start_time: float | None
+    last_clear_time: datetime.datetime | None
+
+
+class FarmerController(QObject):
+    running_changed = pyqtSignal(bool, int)
+    paused_changed = pyqtSignal(bool)
+    output_appended = pyqtSignal(str)
+    output_reset = pyqtSignal()
+    session_progress_changed = pyqtSignal()
+    status_snapshot_changed = pyqtSignal(object)
+    arg_values_changed = pyqtSignal(dict)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, farmer_def: dict, password_supplier=None, parent=None):
+        super().__init__(parent)
+        self.farmer = farmer_def
+        self._password_supplier = password_supplier
+        self.process = None
+        self.output_lines: list[str] = []
+        self.paused = False
+        self._session_clears = 0
+        self._session_max_clears = None
+        self._session_start_time = None
+        self._pause_start_time = None
+        self._last_clear_time = None
+        self._process_exit_expected = False
+        self._uptime_timer = QTimer(self)
+        self._uptime_timer.timeout.connect(self._update_session_progress)
+        self._output_timer = QTimer(self)
+        self._output_timer.timeout.connect(self.check_output)
+        self._arg_values = self._build_default_arg_values()
+
+    @property
+    def is_running(self) -> bool:
+        return self.process is not None and self.process.state() == QProcess.Running
+
+    @property
+    def is_paused(self) -> bool:
+        return self.paused
+
+    @property
+    def session_clears(self) -> int:
+        return self._session_clears
+
+    @property
+    def session_max_clears(self) -> int | None:
+        return self._session_max_clears
+
+    @property
+    def session_start_time(self) -> float | None:
+        return self._session_start_time
+
+    @property
+    def last_clear_time(self) -> datetime.datetime | None:
+        return self._last_clear_time
+
+    @property
+    def process_id(self) -> int:
+        if self.process is None:
+            return 0
+        return int(self.process.processId())
+
+    def get_status_snapshot(self) -> FarmerStatusSnapshot:
+        return FarmerStatusSnapshot(
+            display_name=self.farmer["name"],
+            is_running=self.is_running,
+            is_paused=self.is_paused,
+            process_id=self.process_id,
+            session_clears=self._session_clears,
+            session_max_clears=self._session_max_clears,
+            session_start_time=self._session_start_time,
+            last_clear_time=self._last_clear_time,
+        )
+
+    def get_arg_values(self) -> dict[str, object]:
+        values = {}
+        for arg in self.farmer["args"]:
+            value = self._arg_values.get(arg["name"])
+            if isinstance(value, list):
+                values[arg["name"]] = list(value)
+            else:
+                values[arg["name"]] = value
+        return values
+
+    def set_arg_value(self, arg_name: str, value):
+        if isinstance(value, list):
+            normalized = list(value)
+        else:
+            normalized = value
+        current = self._arg_values.get(arg_name)
+        if current == normalized:
+            return
+        self._arg_values[arg_name] = normalized
+        self.arg_values_changed.emit(self.get_arg_values())
+
+    def start(self, arg_values: dict[str, object]):
+        if self.process is not None:
+            return
+
+        for name, value in arg_values.items():
+            self.set_arg_value(name, value)
+
+        self.resize_window()
+
+        script_path = os.path.join(os.path.dirname(__file__), self.farmer["script"])
+        args = self._build_cli_args()
+        display_args = self._build_display_args(args)
+
+        self.process = QProcess(self)
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("PYTHONUNBUFFERED", "1")
+        env.insert("PYTHONIOENCODING", "utf-8")
+        self.process.setProcessEnvironment(env)
+        self.process.setProcessChannelMode(QProcess.MergedChannels)
+        self.process.readyReadStandardOutput.connect(self.handle_stdout)
+        self.process.finished.connect(self.process_finished)
+
+        self.output_lines = []
+        self.output_reset.emit()
+
+        self._session_clears = 0
+        self._session_start_time = time.monotonic()
+        self._last_clear_time = None
+        self._pause_start_time = None
+        self.paused = False
+        self._session_max_clears = self._read_target_clears()
+        self._process_exit_expected = False
+        self._uptime_timer.start(1000)
+        self.session_progress_changed.emit()
+
+        self.process.start(sys.executable, ["-u", script_path] + args)
+        self._cleanup_pause_flag()
+        self._append_output(
+            f"<color=#10b981>Started {self.farmer['name']} with:\n"
+            f"{' '.join([sys.executable, '-u', script_path] + display_args)}\n</color>"
+        )
+        self._output_timer.start(100)
+        self.running_changed.emit(True, self.process.processId())
+        self.paused_changed.emit(False)
+        self._emit_status_snapshot()
+
+    def stop(self):
+        if self.process is not None:
+            self._process_exit_expected = True
+            self._cleanup_pause_flag()
+            proc = self.process
+            self.process = None
+            try:
+                self._output_timer.stop()
+                proc.kill()
+            except Exception:
+                pass
+            proc.deleteLater()
+        self._after_stop()
+        self._append_output("\nProcess stopped.\n")
+        self.running_changed.emit(False, 0)
+        self._emit_status_snapshot()
+
+    def toggle_pause(self):
+        if self.process is None or self.process.state() != QProcess.Running:
+            return
+
+        pid = self.process.processId()
+        flag_path = get_pause_flag_path(pid)
+
+        if not self.paused:
+            try:
+                with open(flag_path, "w") as f:
+                    f.write("")
+                self.paused = True
+                self._pause_start_time = time.monotonic()
+                self._uptime_timer.stop()
+                self._append_output(f"<color=#f59e0b>[PAUSED] Created pause flag at {flag_path}\n</color>")
+                self.paused_changed.emit(True)
+                self._emit_status_snapshot()
+            except Exception as e:
+                self._append_output(f"[ERROR] Failed to create pause flag: {e}\n")
+                self.error_occurred.emit(str(e))
+        else:
+            try:
+                self.resize_window()
+                if os.path.exists(flag_path):
+                    os.remove(flag_path)
+                self.paused = False
+                if self._pause_start_time is not None and self._session_start_time is not None:
+                    self._session_start_time += time.monotonic() - self._pause_start_time
+                    self._pause_start_time = None
+                self._uptime_timer.start(1000)
+                self._append_output("<color=#10b981>[RESUMED] Removed pause flag\n</color>")
+                self.paused_changed.emit(False)
+                self.session_progress_changed.emit()
+                self._emit_status_snapshot()
+            except Exception as e:
+                self._append_output(f"[ERROR] Failed to remove pause flag: {e}\n")
+                self.error_occurred.emit(str(e))
+
+    def clear_output(self):
+        self.output_lines = []
+        self.output_reset.emit()
+        if self._session_start_time is not None:
+            self._session_start_time = time.monotonic()
+            self.session_progress_changed.emit()
+        self._append_output("\nOutput cleared.\n")
+
+    def resize_window(self):
+        if resize_7ds_window(width=538, height=921):
+            try:
+                screenshot, _ = capture_window()
+                screenshot_shape = screenshot.shape[:2]
+                self._append_output(
+                    f"[SUCCESS] 7DS window resized successfully! Screenshot shape: {screenshot_shape}\n"
+                )
+            except Exception as e:
+                self._append_output(f"[SUCCESS] 7DS window resized successfully! (could not read shape: {e})\n")
+        else:
+            self._append_output("[WARNING] Failed to resize 7DS window. Continuing with current window size...\n")
+        time.sleep(0.5)
+
+    def handle_stdout(self):
+        if self.process is None:
+            return
+        lines = []
+        while self.process.canReadLine():
+            lines.append(bytes(self.process.readLine()).decode("utf-8", errors="replace"))
+        if lines:
+            self._append_output("".join(lines))
+
+    def process_finished(self):
+        proc = self.sender()
+        if proc is not None:
+            proc.deleteLater()
+        expected_stop = self._process_exit_expected
+        self._process_exit_expected = False
+        self._cleanup_pause_flag()
+        self._output_timer.stop()
+        self.process = None
+        self._after_stop()
+        if not expected_stop:
+            self._append_output("\nProcess finished.\n")
+            self.running_changed.emit(False, 0)
+        self._emit_status_snapshot()
+
+    def check_output(self):
+        if self.process is None:
+            return
+        if self.process.bytesAvailable() > 0:
+            self.handle_stdout()
+
+    def _build_default_arg_values(self) -> dict[str, object]:
+        values = {}
+        for arg in self.farmer["args"]:
+            default = arg.get("default")
+            if arg["type"] == "multiselect":
+                values[arg["name"]] = list(default or [])
+            elif arg["type"] == "checkbox":
+                values[arg["name"]] = bool(default)
+            elif default is None:
+                values[arg["name"]] = ""
+            else:
+                values[arg["name"]] = default
+        return values
+
+    def _read_target_clears(self) -> int | None:
+        for arg in self.farmer["args"]:
+            if arg["name"] in ("--clears", "--num-clears") and arg["type"] == "text":
+                val = str(self._arg_values.get(arg["name"], "")).strip()
+                if val and val.lower() != "inf":
+                    try:
+                        return int(val)
+                    except ValueError:
+                        return None
+                return None
+        return None
+
+    def _build_cli_args(self) -> list[str]:
+        args = []
+        for arg in self.farmer["args"]:
+            value = self._arg_values.get(arg["name"])
+            if arg["type"] == "dropdown":
+                if value:
+                    args.extend([arg["name"], str(value)])
+            elif arg["type"] == "checkbox":
+                if value:
+                    args.append(arg["name"])
+            elif arg["type"] == "multiselect":
+                selected = [str(item) for item in (value or []) if str(item)]
+                if selected:
+                    args.extend([arg["name"]] + selected)
+            elif value:
+                args.extend([arg["name"], str(value)])
+        if self.farmer["script"] in PASSWORD_CLI_SCRIPTS:
+            pw = ""
+            if self._password_supplier:
+                try:
+                    pw = self._password_supplier() or ""
+                except Exception:
+                    pw = ""
+            pw = (pw or "").strip()
+            if not pw:
+                data = load_full_config_dict()
+                raw = data.get("game_password", APP_CONFIG_DEFAULTS["game_password"])
+                if raw is None or str(raw).strip() == "":
+                    raw = data.get("default_game_password")
+                pw = ("" if raw is None else str(raw)).strip()
+            if pw:
+                args.extend(["--password", pw])
+        return args
+
+    def _build_display_args(self, args: list[str]) -> list[str]:
+        display_args = []
+        skip_next = False
+        for i, arg in enumerate(args):
+            if skip_next:
+                skip_next = False
+                continue
+            if arg.lower() in ("--password", "-p") and i + 1 < len(args):
+                display_args.extend((arg, "*" * len(args[i + 1])))
+                skip_next = True
+            else:
+                display_args.append(arg)
+        return display_args
+
+    def _append_output(self, text: str):
+        if self._session_start_time is not None:
+            pattern = get_clear_pattern(self.farmer.get("script", ""))
+            if pattern and pattern.search(text):
+                self._on_clear_detected()
+
+        new_lines = text.splitlines(True)
+        self.output_lines.extend(new_lines)
+        if len(self.output_lines) > 1000:
+            self.output_lines = self.output_lines[-1000:]
+            self.output_reset.emit()
+            return
+        self.output_appended.emit(text)
+
+    def _on_clear_detected(self):
+        self._session_clears += 1
+        self._last_clear_time = datetime.datetime.now()
+        self.session_progress_changed.emit()
+        self._emit_status_snapshot()
+
+    def _update_session_progress(self):
+        if self._session_start_time is None:
+            return
+        self.session_progress_changed.emit()
+        self._emit_status_snapshot()
+
+    def _cleanup_pause_flag(self):
+        if self.process is None:
+            return
+        pid = self.process.processId()
+        if pid <= 0:
+            return
+        flag_path = get_pause_flag_path(pid)
+        if os.path.exists(flag_path):
+            try:
+                os.remove(flag_path)
+            except OSError:
+                pass
+
+    def _after_stop(self):
+        self._output_timer.stop()
+        self._uptime_timer.stop()
+        self.paused = False
+        self._pause_start_time = None
+        self.paused_changed.emit(False)
+        self.session_progress_changed.emit()
+
+    def _emit_status_snapshot(self):
+        self.status_snapshot_changed.emit(self.get_status_snapshot())
 
 # Farmer scripts that accept --password / -p (must match argparse in each script).
 PASSWORD_CLI_SCRIPTS = frozenset(
@@ -1103,8 +1493,6 @@ class SettingsTab(QWidget):
         ok, msg = test_ntfy_connection()
         self.status_label.setText(msg)
         self.status_label.setStyleSheet("color: #10b981;" if ok else "color: #ef4444;")
-
-
 class FarmerTab(QWidget):
     _COLOR_TAG_RE = re.compile(r"<color=([^>]+)>(.*?)</color>", re.IGNORECASE | re.DOTALL)
     _LINE_COLOR_RULES = [
@@ -1115,26 +1503,23 @@ class FarmerTab(QWidget):
         (re.compile(r"^\s*[>=\-#]{3,}"),                                 "#4b5563"),
     ]
 
-    def __init__(self, farmer, password_supplier=None, running_changed_cb=None, parent=None):
+    def __init__(self, farmer, controller, parent=None):
         super().__init__(parent)
         self.farmer = farmer
-        self._password_supplier = password_supplier
-        self.process = None
-        self.output_lines = []
-        self.paused = False
-        self._running_changed_cb = running_changed_cb
+        self.controller = controller
+        self._syncing_arg_widgets = False
         self.sa_chest_warning_label = None
         self._default_fmt = QTextCharFormat()
         self._default_fmt.setForeground(QColor("#c0caf5"))
-        # Session Progress state
-        self._session_clears = 0
-        self._session_max_clears = None  # None = inf
-        self._session_start_time = None
-        self._pause_start_time = None
-        self._last_clear_time = None
-        self._uptime_timer = None
-        self.output_timer = None
         self.init_ui()
+        self.controller.output_reset.connect(self._on_output_reset)
+        self.controller.output_appended.connect(self.append_terminal)
+        self.controller.running_changed.connect(self._on_running_changed)
+        self.controller.paused_changed.connect(self._on_paused_changed)
+        self.controller.session_progress_changed.connect(self._refresh_session_progress)
+        self.controller.arg_values_changed.connect(self._sync_arg_widgets)
+        self.controller.status_snapshot_changed.connect(self._on_status_snapshot_changed)
+        self._sync_from_controller()
 
     def init_ui(self):
         layout = QHBoxLayout(self)
@@ -1196,6 +1581,7 @@ class FarmerTab(QWidget):
                     widget.setText(arg["default"])
                 self.arg_widgets[arg["name"]] = widget
                 args_layout.addRow(arg["label"] + ":", widget)
+                self._bind_arg_widget(arg, widget)
 
                 if self.farmer["name"] == "SA Coin Dungeon Farmer" and arg["name"] == "--min-chest-type":
                     widget.currentTextChanged.connect(self.update_sa_chest_warning)
@@ -1243,21 +1629,21 @@ class FarmerTab(QWidget):
         btn_layout = QHBoxLayout()
         self.start_btn = QPushButton("START")
         self.start_btn.setStyleSheet(BTN_START)
-        self.start_btn.clicked.connect(self.start_farmer)
+        self.start_btn.clicked.connect(self._on_start_clicked)
         self.stop_btn = QPushButton("STOP")
         self.stop_btn.setStyleSheet(BTN_STOP)
         self.stop_btn.setEnabled(False)
-        self.stop_btn.clicked.connect(self.stop_farmer)
+        self.stop_btn.clicked.connect(self._on_stop_clicked)
         self.pause_btn = QPushButton("PAUSE")
         self.pause_btn.setStyleSheet(BTN_PAUSE)
         self.pause_btn.setEnabled(False)
-        self.pause_btn.clicked.connect(self.toggle_pause)
+        self.pause_btn.clicked.connect(self._on_pause_clicked)
         self.resize_btn = QPushButton("RESIZE")
         self.resize_btn.setStyleSheet(BTN_RESIZE)
-        self.resize_btn.clicked.connect(self.resize_window)
+        self.resize_btn.clicked.connect(self._on_resize_clicked)
         self.clear_btn = QPushButton("CLEAR")
         self.clear_btn.setStyleSheet(BTN_CLEAR)
-        self.clear_btn.clicked.connect(self.clear_output)
+        self.clear_btn.clicked.connect(self._on_clear_clicked)
         for btn in (self.start_btn, self.stop_btn, self.pause_btn, self.resize_btn, self.clear_btn):
             btn_layout.addWidget(btn)
 
@@ -1395,190 +1781,84 @@ class FarmerTab(QWidget):
 
         self.sa_chest_warning_label.hide()
 
-    def get_args(self):
-        args = []
+    def get_arg_values(self):
+        values = {}
         for arg in self.farmer["args"]:
             widget = self.arg_widgets[arg["name"]]
             if arg["type"] == "dropdown":
-                if value := widget.currentText():
-                    args.extend([arg["name"], value])
+                values[arg["name"]] = widget.currentText()
             elif arg["type"] == "checkbox":
-                checked = widget.isChecked()
-                if checked:
-                    args.append(arg["name"])
+                values[arg["name"]] = widget.isChecked()
             elif arg["type"] == "multiselect":
-                if selected := [cb.text() for cb in widget._checkboxes if cb.isChecked()]:
-                    args.extend([arg["name"]] + selected)
-            elif value := widget.text():
-                args.extend([arg["name"], value])
-        if self.farmer["script"] in PASSWORD_CLI_SCRIPTS:
-            pw = ""
-            if self._password_supplier:
-                try:
-                    pw = self._password_supplier() or ""
-                except Exception:
-                    pw = ""
-            pw = (pw or "").strip()
-            if not pw:
-                data = load_full_config_dict()
-                raw = data.get("game_password", APP_CONFIG_DEFAULTS["game_password"])
-                if raw is None or str(raw).strip() == "":
-                    raw = data.get("default_game_password")
-                pw = ("" if raw is None else str(raw)).strip()
-            if pw:
-                args.extend(["--password", pw])
-        return args
-
-    def _cleanup_pause_flag(self):
-        """Remove the pause flag file for the current process, if it exists."""
-        if self.process is not None:
-            pid = self.process.processId()
-            if pid > 0:
-                flag_path = get_pause_flag_path(pid)
-                if os.path.exists(flag_path):
-                    try:
-                        os.remove(flag_path)
-                    except OSError:
-                        pass
-
-    def start_farmer(self):
-        if self.process is not None:
-            return
-
-        # First, try to resize the 7DS window to the required size
-        self.resize_window()
-
-        script_path = os.path.join(os.path.dirname(__file__), self.farmer["script"])
-        args = self.get_args()
-        # Mask password in the command display
-        display_args = []
-        skip_next = False
-        for i, arg in enumerate(args):
-            if skip_next:
-                skip_next = False
-                continue
-            if arg.lower() in ("--password", "-p") and i + 1 < len(args):
-                display_args.extend((arg, "*" * len(args[i + 1])))
-                skip_next = True
+                values[arg["name"]] = [cb.text() for cb in widget._checkboxes if cb.isChecked()]
             else:
-                display_args.append(arg)
+                values[arg["name"]] = widget.text()
+        return values
 
-        self.process = QProcess(self)
+    def _on_start_clicked(self):
+        self.controller.start(self.get_arg_values())
 
-        # Force unbuffered output to ensure print statements are captured immediately
-        env = QProcessEnvironment.systemEnvironment()
-        env.insert("PYTHONUNBUFFERED", "1")
-        env.insert("PYTHONIOENCODING", "utf-8")
-        self.process.setProcessEnvironment(env)
+    def _on_stop_clicked(self):
+        self.controller.stop()
 
-        # Capture both stdout and stderr
-        self.process.setProcessChannelMode(QProcess.MergedChannels)
-        self.process.readyReadStandardOutput.connect(self.handle_stdout)
-        self.process.finished.connect(self.process_finished)
+    def _on_pause_clicked(self):
+        self.controller.toggle_pause()
 
-        self.terminal.clear()
-        self.output_lines = []
+    def _on_resize_clicked(self):
+        self.controller.resize_window()
 
-        # Reset session progress
-        self._session_clears = 0
-        self._session_start_time = time.monotonic()
-        self._last_clear_time = None
-        # Read target clears from the arg widget (--clears or --num-clears)
-        self._session_max_clears = None
-        for arg in self.farmer["args"]:
-            if arg["name"] in ("--clears", "--num-clears") and arg["type"] == "text":
-                widget = self.arg_widgets.get(arg["name"])
-                if widget:
-                    val = widget.text().strip()
-                    if val and val.lower() != "inf":
-                        try:
-                            self._session_max_clears = int(val)
-                        except ValueError:
-                            pass
-                break
-        # Configure clears bar: fixed max or indeterminate (max=0)
-        if self._session_max_clears is not None:
-            self._sp_clears_bar.setMaximum(self._session_max_clears)
+    def _on_clear_clicked(self):
+        self.controller.clear_output()
+
+    def _bind_arg_widget(self, arg, widget):
+        name = arg["name"]
+        if arg["type"] == "dropdown":
+            widget.currentTextChanged.connect(lambda value, n=name: self.controller.set_arg_value(n, value))
+        elif arg["type"] == "checkbox":
+            widget.toggled.connect(lambda value, n=name: self.controller.set_arg_value(n, value))
+        elif arg["type"] == "multiselect":
+            for checkbox in widget._checkboxes:
+                checkbox.toggled.connect(lambda _checked, n=name, frame=widget: self.controller.set_arg_value(
+                    n, [cb.text() for cb in frame._checkboxes if cb.isChecked()]
+                ))
         else:
-            self._sp_clears_bar.setMaximum(0)  # animated busy indicator
-        self._sp_clears_bar.setValue(0)
-        self._sp_clears_lbl.setText("0")
+            widget.textChanged.connect(lambda value, n=name: self.controller.set_arg_value(n, value))
 
-        self._sp_uptime_lbl.setText("00:00:00")
-        self._sp_uptime_bar.setValue(0)
-        self._sp_last_clear_lbl.setText("--")
-        self._sp_farming_lbl.setText(self.farmer["name"])
-        if self._uptime_timer is None:
-            self._uptime_timer = QTimer(self)
-            self._uptime_timer.timeout.connect(self._update_session_progress)
-        self._uptime_timer.start(1000)
-
-        # Start the process with -u flag for unbuffered output
-        self.process.start(sys.executable, ["-u", script_path] + args)
-        self.start_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
-        self.pause_btn.setEnabled(True)
-        self.pause_btn.setText("PAUSE")
-        self.paused = False
-
-        self._cleanup_pause_flag()
-
-        self.append_terminal(
-            f"<color=#10b981>Started {self.farmer['name']} with:\n{' '.join([sys.executable, '-u', script_path]+display_args)}\n</color>"
-        )
-
-        # Add a timer to periodically check for output (in case of buffering issues)
-        self.output_timer = QTimer(self)
-        self.output_timer.timeout.connect(self.check_output)
-        self.output_timer.start(100)  # Check every 100ms
-
-        if self._running_changed_cb:
-            self._running_changed_cb(True, self.process.processId())
-
-    def _cleanup_output_timer(self):
-        if self.output_timer is not None:
-            self.output_timer.stop()
-            self.output_timer.deleteLater()
-            self.output_timer = None
-
-    def _reset_ui_after_stop(self):
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.pause_btn.setEnabled(False)
-        self.pause_btn.setText("PAUSE")
-        self.paused = False
-        self._pause_start_time = None
-        if self._uptime_timer is not None:
-            self._uptime_timer.stop()
-        if self._session_max_clears is None:
-            self._sp_clears_bar.setMaximum(100)
-
-    def stop_farmer(self):
-        if self.process is not None:
-            self._cleanup_pause_flag()
-            try:
-                self._cleanup_output_timer()
-                self.process.kill()
-            except Exception:
-                pass
-            self.process = None
-        self._reset_ui_after_stop()
-        self.append_terminal("\nProcess stopped.\n")
-        if self._running_changed_cb:
-            self._running_changed_cb(False, 0)
-
-    def handle_stdout(self):
-        if self.process is None:
-            return
-        lines = []
-        while self.process.canReadLine():
-            lines.append(bytes(self.process.readLine()).decode("utf-8", errors="replace"))
-        if lines:
-            self.append_terminal("".join(lines))
+    def _sync_arg_widgets(self, values):
+        self._syncing_arg_widgets = True
+        try:
+            for arg in self.farmer["args"]:
+                name = arg["name"]
+                widget = self.arg_widgets.get(name)
+                if widget is None:
+                    continue
+                value = values.get(name)
+                if arg["type"] == "dropdown":
+                    widget.blockSignals(True)
+                    widget.setCurrentText("" if value is None else str(value))
+                    widget.blockSignals(False)
+                elif arg["type"] == "checkbox":
+                    widget.blockSignals(True)
+                    widget.setChecked(bool(value))
+                    widget.blockSignals(False)
+                elif arg["type"] == "multiselect":
+                    selected = set(value or [])
+                    for checkbox in widget._checkboxes:
+                        checkbox.blockSignals(True)
+                        checkbox.setChecked(checkbox.text() in selected)
+                        checkbox.blockSignals(False)
+                else:
+                    widget.blockSignals(True)
+                    widget.setText("" if value is None else str(value))
+                    widget.blockSignals(False)
+        finally:
+            self._syncing_arg_widgets = False
+        if self.farmer["name"] == "SA Coin Dungeon Farmer" and "--min-chest-type" in self.arg_widgets:
+            self.update_sa_chest_warning(self.arg_widgets["--min-chest-type"].currentText())
+        self._refresh_whale_mode()
 
     def _append_terminal_centered(self, text):
         """Insert text centered in the terminal (used for the initial welcome message)."""
-        self.output_lines.extend(text.splitlines(True))
         cursor = self.terminal.textCursor()
         cursor.movePosition(QTextCursor.End)
         block_fmt = QTextBlockFormat()
@@ -1595,22 +1875,7 @@ class FarmerTab(QWidget):
         self.terminal.ensureCursorVisible()
 
     def append_terminal(self, text):
-        # Check if this text contains a clear signal for the active farmer
-        if self._session_start_time is not None:
-            pattern = _CLEAR_RE.get(self.farmer.get("script", ""))
-            if pattern and pattern.search(text):
-                self._on_clear_detected()
-        new_lines = text.splitlines(True)
-        self.output_lines.extend(new_lines)
-
-        if len(self.output_lines) > 1000:
-            self.output_lines = self.output_lines[-1000:]
-            # Trimmed: must rebuild entire document
-            self.terminal.clear()
-            self._render_lines(self.output_lines)
-        else:
-            # Append only the new lines (no clear/rebuild)
-            self._render_lines(new_lines)
+        self._render_lines(text.splitlines(True))
 
     def _auto_line_color(self, line):
         """Return a QColor for the line based on keyword rules, or None for default."""
@@ -1674,110 +1939,65 @@ class FarmerTab(QWidget):
 
         return segments
 
-    def process_finished(self):
-        self._cleanup_pause_flag()
-        self._cleanup_output_timer()
-        self.process = None
-        self._reset_ui_after_stop()
-        self.append_terminal("\nProcess finished.\n")
-        if self._running_changed_cb:
-            self._running_changed_cb(False, 0)
-
-    def check_output(self):
-        if self.process is None:
-            return
-        if self.process.bytesAvailable() > 0:
-            self.handle_stdout()
-
-    def clear_output(self):
+    def _on_output_reset(self):
         self.terminal.clear()
-        self.output_lines = []
-        if self._session_start_time is not None:
-            self._session_start_time = time.monotonic()
+        if self.controller.output_lines:
+            self._render_lines(self.controller.output_lines)
+        elif not self.controller.is_running:
+            self._append_terminal_centered(FREE_SOFTWARE_MESSAGE)
+
+    def _on_running_changed(self, running: bool, pid: int):
+        del pid
+        self.start_btn.setEnabled(not running)
+        self.stop_btn.setEnabled(running)
+        self.pause_btn.setEnabled(running)
+        if not running:
+            self.pause_btn.setText("PAUSE")
+
+    def _on_paused_changed(self, paused: bool):
+        self.pause_btn.setText("RESUME" if paused else "PAUSE")
+
+    def _refresh_session_progress(self):
+        snapshot = self.controller.get_status_snapshot()
+        self._sp_clears_lbl.setText(str(snapshot.session_clears))
+        self._sp_farming_lbl.setText(self.farmer["name"])
+        if snapshot.last_clear_time is None:
+            self._sp_last_clear_lbl.setText("--")
+        else:
+            self._sp_last_clear_lbl.setText(snapshot.last_clear_time.strftime("%H:%M:%S"))
+
+        if snapshot.session_start_time is None:
             self._sp_uptime_lbl.setText("00:00:00")
+            self._sp_uptime_bar.setMaximum(_UPTIME_CYCLE_SECS)
             self._sp_uptime_bar.setValue(0)
-        self.append_terminal("\nOutput cleared.\n")
-
-    def _on_clear_detected(self):
-        """Called when the active farmer's clear pattern is found in stdout."""
-        self._session_clears += 1
-        self._last_clear_time = datetime.datetime.now()
-        count_str = str(self._session_clears)
-        self._sp_clears_lbl.setText(count_str)
-        self._sp_last_clear_lbl.setText(self._last_clear_time.strftime("%H:%M:%S"))
-        if self._session_max_clears is not None:
-            self._sp_clears_bar.setValue(min(self._session_clears, self._session_max_clears))
-
-    def _update_session_progress(self):
-        """Ticked every second by _uptime_timer to refresh time-based stats."""
-        if self._session_start_time is None:
-            return
-        elapsed = int(time.monotonic() - self._session_start_time)
-
-        # Uptime string
-        h, rem = divmod(elapsed, 3600)
-        m, s = divmod(rem, 60)
-        uptime_str = f"{h:02d}:{m:02d}:{s:02d}"
-        self._sp_uptime_lbl.setText(uptime_str)
-
-        # Progress bars
-        self._sp_uptime_bar.setValue(elapsed % _UPTIME_CYCLE_SECS)    # rolling progress every 720 min
-
-    def resize_window(self):
-        """Resize the 7DS window to the required size"""
-        # First, try to resize the 7DS window to the required size
-        if resize_7ds_window(width=538, height=921):
-            # Capture screenshot to get actual dimensions after resize
-            try:
-                screenshot, _ = capture_window()
-                screenshot_shape = screenshot.shape[:2]
-                self.append_terminal(
-                    f"[SUCCESS] 7DS window resized successfully! Screenshot shape: {screenshot_shape}\n"
-                )
-            except Exception as e:
-                self.append_terminal(f"[SUCCESS] 7DS window resized successfully! (could not read shape: {e})\n")
         else:
-            self.append_terminal("[WARNING] Failed to resize 7DS window. Continuing with current window size...\n")
-        # Small delay to allow window resize to complete
-        time.sleep(0.5)
+            elapsed = int(time.monotonic() - snapshot.session_start_time)
+            h, rem = divmod(elapsed, 3600)
+            m, s = divmod(rem, 60)
+            self._sp_uptime_lbl.setText(f"{h:02d}:{m:02d}:{s:02d}")
+            self._sp_uptime_bar.setMaximum(_UPTIME_CYCLE_SECS)
+            self._sp_uptime_bar.setValue(elapsed % _UPTIME_CYCLE_SECS)
 
-    def toggle_pause(self):
-        """Toggle pause/resume for the current farmer process"""
-        if self.process is None or self.process.state() != QProcess.Running:
-            return
-
-        pid = self.process.processId()
-        flag_path = get_pause_flag_path(pid)
-
-        if not self.paused:
-            # Pause the process
-            try:
-                with open(flag_path, "w") as f:
-                    f.write("")  # Create empty flag file
-                self.paused = True
-                self._pause_start_time = time.monotonic()
-                if self._uptime_timer is not None:
-                    self._uptime_timer.stop()
-                self.pause_btn.setText("RESUME")
-                self.append_terminal(f"<color=#f59e0b>[PAUSED] Created pause flag at {flag_path}\n</color>")
-            except Exception as e:
-                self.append_terminal(f"[ERROR] Failed to create pause flag: {e}\n")
+        if snapshot.session_max_clears is not None:
+            self._sp_clears_bar.setMaximum(snapshot.session_max_clears)
+            self._sp_clears_bar.setValue(min(snapshot.session_clears, snapshot.session_max_clears))
+        elif snapshot.is_running:
+            self._sp_clears_bar.setMaximum(0)
+            self._sp_clears_bar.setValue(0)
         else:
-            # Resume the process
-            try:
-                self.resize_window()
-                if os.path.exists(flag_path):
-                    os.remove(flag_path)
-                self.paused = False
-                if self._pause_start_time is not None and self._session_start_time is not None:
-                    self._session_start_time += time.monotonic() - self._pause_start_time
-                    self._pause_start_time = None
-                if self._uptime_timer is not None:
-                    self._uptime_timer.start(1000)
-                self.pause_btn.setText("PAUSE")
-                self.append_terminal(f"<color=#10b981>[RESUMED] Removed pause flag\n</color>")
-            except Exception as e:
-                self.append_terminal(f"[ERROR] Failed to remove pause flag: {e}\n")
+            self._sp_clears_bar.setMaximum(100)
+            self._sp_clears_bar.setValue(0)
+
+    def _on_status_snapshot_changed(self, _snapshot):
+        if not self._syncing_arg_widgets:
+            self._refresh_session_progress()
+
+    def _sync_from_controller(self):
+        self._sync_arg_widgets(self.controller.get_arg_values())
+        self._on_output_reset()
+        self._on_running_changed(self.controller.is_running, self.controller.process_id)
+        self._on_paused_changed(self.controller.is_paused)
+        self._refresh_session_progress()
 
     def load_farmer_image(self, image_filename=None):
         """Load and display a farmer image into self.image_label."""
@@ -2012,10 +2232,9 @@ class GridView(QWidget):
 class DetailView(QWidget):
     """Wraps a FarmerTab with the detail bar (← Back + name + running status)."""
 
-    def __init__(self, farmer, password_supplier, back_callback, running_changed=None, parent=None):
+    def __init__(self, farmer, controller, back_callback, parent=None):
         super().__init__(parent)
-        self._back = back_callback
-        self._running_changed_ext = running_changed
+        self.controller = controller
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -2049,20 +2268,17 @@ class DetailView(QWidget):
         layout.addWidget(detail_bar)
 
         # ── FarmerTab ──
-        self.farmer_tab = FarmerTab(
-            farmer,
-            password_supplier=password_supplier,
-            running_changed_cb=self._on_running_changed,
-        )
+        self.farmer_tab = FarmerTab(farmer, controller)
         layout.addWidget(self.farmer_tab, 1)
+        self.controller.running_changed.connect(self._on_running_changed)
+        self._on_running_changed(self.controller.is_running, self.controller.process_id)
 
     def _on_running_changed(self, running: bool, pid: int):
+        del pid
         if running:
             self.running_lbl.setText("● Running")
         else:
             self.running_lbl.setText("")
-        if self._running_changed_ext:
-            self._running_changed_ext(running)
 
 
 # List View
@@ -2070,10 +2286,10 @@ class DetailView(QWidget):
 class ListView(QWidget):
     """Sidebar list + right content panel (alternative to grid)."""
 
-    def __init__(self, farmers, password_supplier, parent=None):
+    def __init__(self, farmers, controllers, parent=None):
         super().__init__(parent)
         self._farmers = farmers
-        self._password_supplier = password_supplier
+        self._controllers = controllers
         self._farmer_tabs: dict = {}
         self._list_rows: dict = {}  # farmer_name → row index in QListWidget
         self._init_ui()
@@ -2130,13 +2346,12 @@ class ListView(QWidget):
 
         # Indices 1+: FarmerTabs
         for farmer in self._farmers:
-            tab = FarmerTab(
-                farmer,
-                password_supplier=self._password_supplier,
-                running_changed_cb=lambda running, pid, n=farmer["name"]: self._on_running_changed(n, running),
-            )
+            controller = self._controllers[farmer["name"]]
+            controller.running_changed.connect(lambda running, pid, n=farmer["name"]: self._on_running_changed(n, running))
+            tab = FarmerTab(farmer, controller)
             self._stack.addWidget(tab)
             self._farmer_tabs[farmer["name"]] = tab
+            self._on_running_changed(farmer["name"], controller.is_running)
 
         layout.addWidget(self._stack, 1)
 
@@ -2204,6 +2419,14 @@ class MainWindow(QMainWindow):
 
         self.about_tab = AboutTab()
         self.settings_tab = SettingsTab()
+        self._controllers = {
+            farmer["name"]: FarmerController(
+                farmer,
+                password_supplier=lambda: self.settings_tab.password_edit.text(),
+                parent=self,
+            )
+            for farmer in FARMERS
+        }
 
         central = QWidget()
         root = QVBoxLayout(central)
@@ -2259,11 +2482,11 @@ class MainWindow(QMainWindow):
 
         self.grid_view = GridView(FARMERS)
         self.grid_view.farmer_selected.connect(self._on_farmer_selected)
+        for name, controller in self._controllers.items():
+            controller.running_changed.connect(lambda running, pid, n=name: self.grid_view.set_running(n, running))
+            self.grid_view.set_running(name, controller.is_running)
 
-        self.list_view = ListView(
-            FARMERS,
-            password_supplier=lambda: self.settings_tab.password_edit.text(),
-        )
+        self.list_view = ListView(FARMERS, self._controllers)
 
         self.about_wrapper = self._wrap_with_back_bar(self.about_tab, "About")
         self.settings_wrapper = self._wrap_with_back_bar(self.settings_tab, "Settings")
@@ -2324,6 +2547,13 @@ class MainWindow(QMainWindow):
             self._show_grid()
 
     def _toggle_theme(self):
+        if self._any_farmer_running():
+            QMessageBox.information(
+                self,
+                "Theme Change Blocked",
+                "Stop all running farmers before changing the theme.",
+            )
+            return
         _save_theme("light" if _ACTIVE_THEME == "dark" else "dark")
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
@@ -2344,15 +2574,13 @@ class MainWindow(QMainWindow):
         if name in self._detail_views:
             return self._detail_views[name]
         farmer_def = self._farmer_by_name[name]
-        view = DetailView(
-            farmer_def,
-            password_supplier=lambda: self.settings_tab.password_edit.text(),
-            back_callback=self._show_grid,
-            running_changed=lambda running, n=name: self.grid_view.set_running(n, running),
-        )
+        view = DetailView(farmer_def, self._controllers[name], back_callback=self._show_grid)
         self.stack.addWidget(view)
         self._detail_views[name] = view
         return view
+
+    def _any_farmer_running(self) -> bool:
+        return any(controller.is_running for controller in self._controllers.values())
 
 
 def main():

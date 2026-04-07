@@ -45,7 +45,6 @@ class IFloor4Farmer(IFarmer):
     total_count = 0
     reset_count = 0
     dict_of_defeats = defaultdict(int)
-    _swipe_attempts = 0
 
     def __init__(
         self,
@@ -84,6 +83,7 @@ class IFloor4Farmer(IFarmer):
 
         # Placeholder for the thread that will call the fighter logic
         self.fight_thread = None
+        self._swipe_attempts = 0
 
         # For the login/dailies
         IFarmer.daily_farmer.set_daily_pvp(True)
@@ -116,6 +116,40 @@ class IFloor4Farmer(IFarmer):
 
         return str_msg
 
+    def _search_for_target_demonic_beast(self, screenshot, window_location) -> bool:
+        if not find(vio.demonic_beast_battle, screenshot):
+            self._swipe_attempts = 0
+            return True
+
+        if find(self.db_image, screenshot):
+            self._swipe_attempts = 0
+            return True
+
+        self._swipe_attempts += 1
+        if self._swipe_attempts <= 4:
+            print(f"Wrong demonic beast, attempt {self._swipe_attempts}, swiping right...")
+            drag_im(
+                Coordinates.get_coordinates("right_swipe"),
+                Coordinates.get_coordinates("left_swipe"),
+                window_location,
+            )
+            time.sleep(0.5)
+            return False
+
+        if self._swipe_attempts <= 8:
+            print(f"Wrong demonic beast, attempt {self._swipe_attempts}, swiping left...")
+            drag_im(
+                Coordinates.get_coordinates("left_swipe"),
+                Coordinates.get_coordinates("right_swipe"),
+                window_location,
+            )
+            time.sleep(0.5)
+            return False
+
+        print("Couldn't find the target demonic beast after 8 swipes. Resetting the search.")
+        self._swipe_attempts = 0
+        return False
+
     def going_to_db_state(self):
         """This should be the original state. Let's go to the DemonicBeast menu"""
         screenshot, window_location = capture_window()
@@ -132,29 +166,8 @@ class IFloor4Farmer(IFarmer):
         # If we're in the battle menu, click on Demonic Beast
         find_and_click(vio.demonic_beast, screenshot, window_location)
 
-        # If we see we're inside the DB selection screen but don't see our DemonicBeast,
-        # swipe right (or left after 4 attempts) and try again
-        if find(vio.demonic_beast_battle, screenshot) and not find(self.db_image, screenshot):
-            IFloor4Farmer._swipe_attempts += 1
-            if IFloor4Farmer._swipe_attempts > 4:
-                print(f"Wrong demonic beast, attempt {IFloor4Farmer._swipe_attempts}, swiping left...")
-                drag_im(
-                    Coordinates.get_coordinates("left_swipe"),
-                    Coordinates.get_coordinates("right_swipe"),
-                    window_location,
-                )
-            else:
-                print(f"Wrong demonic beast, attempt {IFloor4Farmer._swipe_attempts}, swiping right...")
-                drag_im(
-                    Coordinates.get_coordinates("right_swipe"),
-                    Coordinates.get_coordinates("left_swipe"),
-                    window_location,
-                )
-            time.sleep(0.5)
+        if not self._search_for_target_demonic_beast(screenshot, window_location):
             return
-
-        # Reset swipe counter once the beast is found
-        IFloor4Farmer._swipe_attempts = 0
 
         # Go into the 'db' section
         find_and_click(self.db_image, screenshot, window_location)
