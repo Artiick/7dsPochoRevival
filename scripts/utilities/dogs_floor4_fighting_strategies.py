@@ -195,6 +195,8 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     def get_next_card_index_phase2(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
         self._maybe_reset("phase_2")
 
+        print(f"Phase 2: fight turn {IBattleStrategy.fight_turn}")
+
         nasiens_ids = self._matching_card_ids(hand_of_cards, NASI_TEMPLATES)
         has_nasiens_ult = any(self._card_matches_any(hand_of_cards[i], ("nasi_ult",)) for i in nasiens_ids)
 
@@ -206,8 +208,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         # On even turns, we have to disable stance cancel cards!
         if IBattleStrategy.fight_turn % 2 == 0:
-            attack_debuff_ids = self._tr(hand_of_cards, ("attack_debuff",), (CardRanks.SILVER, CardRanks.GOLD))
-            if attack_debuff_ids.size > 0:
+            attack_debuff_ids = [
+                i
+                for i, card in enumerate(hand_of_cards)
+                if card.card_type == CardTypes.ATTACK_DEBUFF and card.card_rank in (CardRanks.SILVER, CardRanks.GOLD)
+            ]
+            if len(attack_debuff_ids) > 0:
                 hand_of_cards[attack_debuff_ids[-1]].card_type = CardTypes.GROUND
                 print(f"Disabling one stance cancel {hand_of_cards[attack_debuff_ids[-1]].card_name}!")
 
