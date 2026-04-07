@@ -33,6 +33,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     _last_phase_seen = None
     lillia_in_team = False
     roxy_in_team = False
+    taunt_removed = False
 
     removed_damage_cap = False
     # Minimum fight_turn index where Escalin/Roxy HAM is allowed; block while fight_turn < this (-1 = unset).
@@ -43,6 +44,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         DogsFloor4BattleStrategy._last_phase_seen = None
         DogsFloor4BattleStrategy.removed_damage_cap = False
         DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = -1
+        DogsFloor4BattleStrategy.taunt_removed = False
 
     def reset_run_state(self, *, lillia_in_team=False, roxy_in_team=False):
         """Called from DogsFloor4Fighter.run before the fight loop."""
@@ -247,9 +249,21 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         for i in st_gauge_ids:
             hand_of_cards[i].card_type = CardTypes.GROUND
 
-        # Pre-cap Roxy: BRONZE roxy_st merge when hand has no SILVER/GOLD roxy_st. SILVER/GOLD tuck for Smarter is in _smarter_phase3.
-        if type(self).roxy_in_team and not DogsFloor4BattleStrategy.removed_damage_cap:
-            if self._tr(hand_of_cards, ("roxy_st",), (CardRanks.SILVER, CardRanks.GOLD)).size == 0:
+        # Pre-cap Roxy: BRONZE roxy_st merge when hand has no SILVER/GOLD roxy_st.
+        # SILVER/GOLD tuck for Smarter is in _smarter_phase3.
+        if (
+            type(self).roxy_in_team
+            and not DogsFloor4BattleStrategy.removed_damage_cap
+            and not DogsFloor4BattleStrategy.taunt_removed
+        ):
+            roxy_st_ids = self._tr(hand_of_cards, ("roxy_st",), (CardRanks.SILVER, CardRanks.GOLD))
+            if IBattleStrategy.fight_turn == 2 and roxy_st_ids.size > 0:
+                DogsFloor4BattleStrategy.taunt_removed = True
+                print("Removing taunt with Roxy!")
+                return int(roxy_st_ids[-1])
+
+            if not roxy_st_ids.size:
+                # We haven't removed the taunt and don't have a good Roxy ST saved to remove it...
                 drag = self._best_merge_drag_indices(
                     hand_of_cards,
                     ("roxy_st",),
@@ -309,12 +323,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 return self._smarter_phase3(hand_of_cards, picked_cards)
 
             # Escalin talent (gauge removal): Roxy — play SILVER/GOLD roxy_st if playable; else Nasi ult if SILVER/GOLD roxy_st is DISABLED; else talent.
-            played_roxy_st_ids = self._tr(picked_cards, ("roxy_st",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
-            if type(self).roxy_in_team and not len(played_roxy_st_ids):
+            if type(self).roxy_in_team and not DogsFloor4BattleStrategy.taunt_removed:
                 roxy_st_sg_ranks = (CardRanks.SILVER, CardRanks.GOLD)
                 playable_roxy_st = self._matching_card_ids(hand_of_cards, ("roxy_st",), ranks=roxy_st_sg_ranks)
                 if playable_roxy_st:
-                    print("Phase 3: playing SILVER/GOLD roxy_st before Escalin talent")
+                    print("Phase 3: playing SILVER/GOLD roxy_st instead of Escalin talent")
+                    DogsFloor4BattleStrategy.taunt_removed = True
                     return playable_roxy_st[-1]
                 roxy_st_idx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_sg_ranks)
                 nasiens_ult_here = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
@@ -323,7 +337,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     return nasiens_ult_here[-1]
 
             if (
-                not len(played_roxy_st_ids)
+                not DogsFloor4BattleStrategy.taunt_removed
                 and find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6)
                 and card_turn == 0
             ):

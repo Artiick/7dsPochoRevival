@@ -72,11 +72,24 @@ class IFighter(abc.ABC):
             print("Manually stopping the fighter thread.")
             self.exit_thread = True
 
+    def _before_pick_cards(self, *, screenshot, window_location, empty_card_slots: int) -> None:
+        """Hook for subclasses to react to the slot-count observation before card selection.
+
+        ``play_cards`` owns the shared flow and reads the screenshot / empty-slot count once. Subclasses
+        may use this hook to update internal state from that exact observation before slot-index
+        calculation and ``battle_strategy.pick_cards()`` run. The hook must not play cards or change
+        the control flow of ``play_cards`` directly.
+        """
+
     def play_cards(self, **kwargs):
         """Read the current hand of cards, and play them based on the available card slots."""
 
         screenshot, window_location = capture_window()
         empty_card_slots = self.count_empty_card_slots(screenshot)
+
+        self._before_pick_cards(
+            screenshot=screenshot, window_location=window_location, empty_card_slots=empty_card_slots
+        )
 
         # if empty_card_slots == 1:
         #     index_to_play = selected_cards[1][self.available_card_slots - 1]

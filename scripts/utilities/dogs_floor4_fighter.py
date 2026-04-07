@@ -81,6 +81,29 @@ class DogsFloor4Fighter(DogsFighter):
         self._maybe_increment_fight_turn_at_phase3_turn_start()
         self.play_cards()
 
+    def _before_pick_cards(self, *, screenshot, window_location, empty_card_slots: int) -> None:
+        """Phase 3 fallback: count a normal turn if slot detection stabilizes late inside ``play_cards``.
+
+        Race we are handling:
+        - ``_try_enter_my_turn`` and the early phase-3 check may still see only 1 empty slot
+        - the shared ``play_cards`` flow may then see 3+ empty slots moments later on the first pick
+          of the same turn
+
+        In that case, count this as a normal phase-3 turn here using the same slot-count observation
+        that will drive slot-index calculation and card selection. We still keep the overall policy
+        of start-only counting and never increment at phase-3 ``finish_turn``.
+        """
+        if IFighter.current_phase != 3:
+            return
+        if DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start:
+            return
+        if self.picked_cards[0].card_image is not None:
+            return
+        if empty_card_slots < 3:
+            return
+        self.battle_strategy.increment_fight_turn()
+        DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start = True
+
     def finish_turn(self):
         if IFighter.current_phase == 3:
             # Phase 3 turn counting is start-only. We deliberately avoid end-of-turn increments so
