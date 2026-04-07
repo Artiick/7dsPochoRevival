@@ -45,11 +45,15 @@ class DogsFloor4Fighter(DogsFighter):
         return entered
 
     def _maybe_increment_fight_turn_at_phase3_turn_start(self):
-        """Phase 3: on the first card pick of the player turn, maybe advance ``fight_turn`` (if opening slots >= 3).
+        """Phase 3: count turns only at turn start, and only for normal 3+/4-slot openings.
 
         Runs every MY_TURN loop tick before ``play_cards``; mid-turn ticks are skipped via ``picked_cards[0]``.
-        If we do not increment here, ``finish_turn`` increments instead. Opening slot count may be nudged up
-        from vision when it exceeds ``available_card_slots`` (same idea as ``play_cards``).
+        We intentionally do *not* increment at ``finish_turn`` for phase 3 anymore. This keeps the visible
+        phase-3 turn counter stable in the normal all-4-units-alive case, even if short/cleanup turns happen.
+        If units die and opening slots stay below 3, we accept that the counter becomes best-effort.
+
+        Opening slot count may be nudged up from vision when it exceeds ``available_card_slots``
+        (same idea as ``play_cards``).
         """
         if IFighter.current_phase != 3:
             DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start = False
@@ -79,8 +83,8 @@ class DogsFloor4Fighter(DogsFighter):
 
     def finish_turn(self):
         if IFighter.current_phase == 3:
-            if not DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start:
-                self.battle_strategy.increment_fight_turn()
+            # Phase 3 turn counting is start-only. We deliberately avoid end-of-turn increments so
+            # short turns (for example, 1-slot cleanup turns) do not create confusing visible jumps.
             DogsFloor4Fighter._phase3_fight_turn_incremented_at_turn_start = False
             self._reset_instance_variables()
             print("Finished my turn!")

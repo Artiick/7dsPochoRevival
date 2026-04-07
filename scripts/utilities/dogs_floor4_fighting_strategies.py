@@ -322,8 +322,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     print("Phase 3: Nasi ult to unlock DISABLED SILVER/GOLD roxy_st")
                     return nasiens_ult_here[-1]
 
-            if not len(played_roxy_st_ids) and find_and_click(
-                vio.talent_escalin, screenshot, window_location, threshold=0.6
+            if (
+                not len(played_roxy_st_ids)
+                and find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6)
+                and card_turn == 0
             ):
                 print("Phase 3: activating Escalin talent!")
                 time.sleep(2.5)
