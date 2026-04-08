@@ -124,7 +124,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             time.sleep(2.5)
 
         # Phase 1: First turn, play a sequence of cards
-        if IBattleStrategy.fight_turn == 0:
+        if IBattleStrategy.fight_turn == 1:
 
             stance_already_picked = bool(self._matching_card_ids(picked_cards, ("thonar_stance",)))
             if not stance_already_picked:
@@ -168,7 +168,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 return self._best_matching_card(hand_of_cards, ("escalin_aoe",))
 
         # fight_turn 1: with two Nasi stuns, burn filler (no Escalin/Roxy/stun); else legacy single-stun tuck.
-        if IBattleStrategy.fight_turn == 1:
+        if IBattleStrategy.fight_turn == 2:
             nasiens_stance_cancel_id = self._matching_card_ids(hand_of_cards, ("nasi_stun",))
             if len(nasiens_stance_cancel_id) >= 2:
                 print("Phase 1: two Nasi stuns — disabling Escalin, Roxy, and up to two stuns for this pick.")
