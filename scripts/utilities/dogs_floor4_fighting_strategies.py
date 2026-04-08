@@ -338,6 +338,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 return int(lillia_aoe_ids[-1])
 
             if played_st_gauge_ids.size <= 1:
+                if not DogsFloor4BattleStrategy.taunt_removed:
+                    print("We have enough gold cards but taunt isn't removed :(")
+                    return self._smarter_phase3(hand_of_cards, picked_cards)
+
                 # Play gold ST gauge cards (two total to clear cap when no Lillia AOE).
                 st_gauge_pick_id = int(st_gauge_ids[-1]) if st_gauge_ids.size else -1
                 if st_gauge_pick_id != -1:
