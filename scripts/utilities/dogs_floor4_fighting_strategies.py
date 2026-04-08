@@ -264,16 +264,15 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print("Removing taunt with Roxy!")
                 return int(roxy_st_ids[-1])
 
-            if not roxy_st_ids.size:
-                # We haven't removed the taunt and don't have a good Roxy ST saved to remove it...
-                drag = self._best_merge_drag_indices(
-                    hand_of_cards,
-                    ("roxy_st",),
-                    rank=CardRanks.BRONZE,
-                    log_label="roxy_st BRONZE merge",
-                )
-                if drag is not None:
-                    return drag
+            # We haven't removed the taunt and don't have a good Roxy ST saved to remove it...
+            drag = self._best_merge_drag_indices(
+                hand_of_cards,
+                ("roxy_st",),
+                rank=CardRanks.BRONZE,
+                log_label="roxy_st BRONZE merge",
+            )
+            if drag is not None:
+                return drag
 
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
