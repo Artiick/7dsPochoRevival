@@ -33,7 +33,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     _last_phase_seen = None
     lillia_in_team = False
     roxy_in_team = False
-    taunt_removed = False
+    taunt_removed = True
 
     removed_damage_cap = False
     # Minimum fight_turn index where Escalin/Roxy HAM is allowed; block while fight_turn < this (-1 = unset).
@@ -44,7 +44,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         DogsFloor4BattleStrategy._last_phase_seen = None
         DogsFloor4BattleStrategy.removed_damage_cap = False
         DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = -1
-        DogsFloor4BattleStrategy.taunt_removed = False
+        DogsFloor4BattleStrategy.taunt_removed = True
 
     def reset_run_state(self, *, lillia_in_team=False, roxy_in_team=False):
         """Called from DogsFloor4Fighter.run before the fight loop."""
@@ -259,7 +259,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             and not DogsFloor4BattleStrategy.taunt_removed
         ):
             roxy_st_ids = self._tr(hand_of_cards, ("roxy_st",), (CardRanks.SILVER, CardRanks.GOLD))
-            if IBattleStrategy.fight_turn == 2 and roxy_st_ids.size > 0:
+            if roxy_st_ids.size > 0:
                 DogsFloor4BattleStrategy.taunt_removed = True
                 print("Removing taunt with Roxy!")
                 return int(roxy_st_ids[-1])
