@@ -244,6 +244,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if rx.size > 0:
                 hand_of_cards[int(rx[-1])].card_type = CardTypes.DISABLED
 
+        # If still all hand is GROUND, move two rightmost cards
+        if hand_of_cards and all(c.card_type == CardTypes.GROUND for c in hand_of_cards):
+            return [-1, -2]
+
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
     def get_next_card_index_phase3(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
