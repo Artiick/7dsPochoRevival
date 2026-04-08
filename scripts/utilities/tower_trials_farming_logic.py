@@ -85,6 +85,7 @@ class TowerTrialsFarmer(IFarmer):
         if find_and_click(vio.continue_fight, screenshot, window_location):
             TowerTrialsFarmer.num_fights += 1
             print(f"Fighting again! Total fights so far: {TowerTrialsFarmer.num_fights}")
+            print("[CLEAR]")
             return
 
         # For when we've cleared an episode

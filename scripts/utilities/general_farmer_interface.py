@@ -32,7 +32,22 @@ class States(Enum):
     FORTUNE_CARD = 7
 
 
-class IFarmer:
+class IFarmerMeta(type):
+    """Metaclass that auto-prints [POT] whenever stamina_pots is incremented."""
+
+    @property
+    def stamina_pots(cls):
+        return cls._stamina_pots
+
+    @stamina_pots.setter
+    def stamina_pots(cls, value):
+        old = getattr(cls, '_stamina_pots', 0)
+        cls._stamina_pots = value
+        if value > old:
+            print("[POT]")
+
+
+class IFarmer(metaclass=IFarmerMeta):
     """Generic farmer interface."""
 
     # For thread-safe variables
@@ -41,7 +56,7 @@ class IFarmer:
     # For type helping
     current_state: int
     fighter: IFighter
-    stamina_pots: int = 0
+    _stamina_pots: int = 0  # managed by IFarmerMeta — use IFarmer.stamina_pots
 
     # Keep track of the defeats in an organized manner
     dict_of_defeats = defaultdict(int)

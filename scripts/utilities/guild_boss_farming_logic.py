@@ -109,6 +109,7 @@ class GuildBossFarmer(IFarmer):
         if find_and_click(vio.boss_mission, screenshot, window_location):
             GuildBossFarmer.num_fights += 1
             logger.info(f"Did {GuildBossFarmer.num_fights} runs. Re-starting the fight!")
+            print("[CLEAR]")
             return
         find_and_click(vio.boss_results, screenshot, window_location)
 

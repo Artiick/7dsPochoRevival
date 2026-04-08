@@ -627,41 +627,6 @@ FARMERS = [
 
 _UPTIME_CYCLE_SECS = 12 * 3600  # Session uptime bar resets every 12 hours
 
-# Maps each farmer script to the stdout pattern that signals one clear completed.
-# Patterns are taken directly from the print() calls in each farming logic file.
-_CLEAR_RE: dict[str, re.Pattern] = {
-    # Demon farmer: demon_farming_logic.py:362
-    "DemonFarmer.py":         re.compile(r"We've destroyed \d+/\d+(?: Indura)? demons \([\d.]+%\)\."),
-    # Demonic Beast farmers (floor 3 = full cycle): demonic_beast_farming_logic.py:302
-    "BirdFarmer.py":          re.compile(r"Floor 3 complete!"),
-    "DeerFarmer.py":          re.compile(r"Floor 3 complete!"),
-    "DogsFarmer.py":          re.compile(r"Floor 3 complete!"),
-    "SnakeFarmer.py":         re.compile(r"Floor 3 complete!"),
-    "RatFarmer.py":           re.compile(r"Floor 3 complete!"),
-    # Floor 4 farmers: floor_4_farming_logic.py:239
-    "BirdFloor4Farmer.py":    re.compile(r"FLOOR 4 COMPLETE, WOOO!"),
-    "DeerFloor4Farmer.py":    re.compile(r"FLOOR 4 COMPLETE, WOOO!"),
-    "DogsFloor4Farmer.py":    re.compile(r"FLOOR 4 COMPLETE, WOOO!"),
-    # Demon King: demon_king_farming_logic.py:174
-    "DemonKingFarmer.py":     re.compile(r"Fight complete! Cleared DK \d+ times\."),
-    # Final Boss: final_boss_farming_logic.py:142
-    "FinalBossFarmer.py":     re.compile(r"FB cleared! \d+ times so far\."),
-    # Legendary Boss: legendary_boss_farming_logic.py:159
-    "LegendaryBossFarmer.py": re.compile(r"LB cleared! \d+ times so far\."),
-    # SA Dungeon: sa_dungeon_farming_logic.py:279
-    "SADungeonFarmer.py":     re.compile(r"We've completed \d+ runs so far"),
-    # Tower Trials: tower_trials_farming_logic.py:87
-    "TowerTrialsFarmer.py":   re.compile(r"Fighting again! Total fights so far: \d+"),
-    # Boss Battle: boss_battle_farming_logic.py:127
-    "BossBattleFarmer.py":    re.compile(r"We've completed \d+ runs so far\."),
-    # Guild Boss: guild_boss_farming_logic.py:111 (logger → merged channels)
-    "GuildBossFarmer.py":     re.compile(r"Did \d+ runs\. Re-starting the fight!"),
-}
-
-
-def get_clear_pattern(script_name: str) -> re.Pattern | None:
-    return _CLEAR_RE.get(script_name)
-
 
 @dataclass(frozen=True)
 class FarmerStatusSnapshot:
@@ -670,6 +635,8 @@ class FarmerStatusSnapshot:
     is_paused: bool
     process_id: int
     session_clears: int
+    session_pots: int
+    session_losses: int
     session_max_clears: int | None
     session_start_time: float | None
     last_clear_time: datetime.datetime | None
@@ -693,6 +660,8 @@ class FarmerController(QObject):
         self.output_lines: list[str] = []
         self.paused = False
         self._session_clears = 0
+        self._session_pots = 0
+        self._session_losses = 0
         self._session_max_clears = None
         self._session_start_time = None
         self._pause_start_time = None
@@ -741,6 +710,8 @@ class FarmerController(QObject):
             is_paused=self.is_paused,
             process_id=self.process_id,
             session_clears=self._session_clears,
+            session_pots=self._session_pots,
+            session_losses=self._session_losses,
             session_max_clears=self._session_max_clears,
             session_start_time=self._session_start_time,
             last_clear_time=self._last_clear_time,
@@ -793,6 +764,8 @@ class FarmerController(QObject):
         self.output_reset.emit()
 
         self._session_clears = 0
+        self._session_pots = 0
+        self._session_losses = 0
         self._session_start_time = time.monotonic()
         self._last_clear_time = None
         self._pause_start_time = None
@@ -996,17 +969,27 @@ class FarmerController(QObject):
 
     def _append_output(self, text: str):
         if self._session_start_time is not None:
-            pattern = get_clear_pattern(self.farmer.get("script", ""))
-            if pattern and pattern.search(text):
+            if "[CLEAR]" in text:
                 self._on_clear_detected()
+            if "[POT]" in text:
+                self._session_pots += 1
+                self.session_progress_changed.emit()
+            if "[LOSS]" in text:
+                self._session_losses += 1
+                self.session_progress_changed.emit()
 
-        new_lines = text.splitlines(True)
+        _HIDDEN_MARKERS = {"[CLEAR]", "[POT]", "[LOSS]"}
+        new_lines = [
+            line for line in text.splitlines(True)
+            if line.strip() not in _HIDDEN_MARKERS
+        ]
         self.output_lines.extend(new_lines)
         if len(self.output_lines) > 1000:
             self.output_lines = self.output_lines[-1000:]
             self.output_reset.emit()
             return
-        self.output_appended.emit(text)
+        if new_lines:
+            self.output_appended.emit("".join(new_lines))
 
     def _on_clear_detected(self):
         self._session_clears += 1
@@ -1739,13 +1722,19 @@ class FarmerTab(QWidget):
 
         # Left — Clears
         left_lay = QVBoxLayout()
-        left_lay.setSpacing(2)
+        left_lay.setSpacing(0)
         left_lay.setContentsMargins(0, 0, 20, 0)
         left_lay.addWidget(section_label("CLEARS"))
         left_lay.addSpacing(4)
+        left_lay.addStretch()
         self._sp_clears_lbl,  self._sp_clears_bar  = make_bar_metric(
             left_lay, "Clears", "0", bar_max=100, bar_color=C["accent"]
         )
+        left_lay.addStretch()
+        self._sp_pots_lbl, self._sp_pots_bar = make_bar_metric(
+            left_lay, "Stamina Pots", "0", bar_color="#f59e0b"
+        )
+        left_lay.addStretch()
         self._sp_uptime_lbl,  self._sp_uptime_bar  = make_bar_metric(
             left_lay, "Uptime", "00:00:00", bar_max=_UPTIME_CYCLE_SECS, bar_color=C["blue"]
         )
@@ -1765,6 +1754,19 @@ class FarmerTab(QWidget):
         right_lay.addSpacing(4)
         self._sp_last_clear_lbl = make_row(right_lay, "Last clear", "--")
         self._sp_farming_lbl    = make_row(right_lay, "Farming", self.farmer["name"])
+        right_lay.addSpacing(4)
+        self._sp_wins_lbl  = make_row(right_lay, "Wins",       "0")
+        self._sp_wins_lbl.setStyleSheet(
+            "color: #10b981; font-size: 13px; font-weight: 600; background: transparent; border: none;"
+        )
+        self._sp_loss_lbl  = make_row(right_lay, "Loss",       "0")
+        self._sp_loss_lbl.setStyleSheet(
+            "color: #ef4444; font-size: 13px; font-weight: 600; background: transparent; border: none;"
+        )
+        self._sp_total_lbl = make_row(right_lay, "Total Runs", "0")
+        self._sp_winrate_lbl, self._sp_winrate_bar = make_bar_metric(
+            right_lay, "Win Rate", "0%", bar_max=100, bar_color="#10b981"
+        )
         right_lay.addStretch()
 
         outer.addLayout(left_lay, 2)
@@ -1958,8 +1960,6 @@ class FarmerTab(QWidget):
         self.terminal.clear()
         if self.controller.output_lines:
             self._render_lines(self.controller.output_lines)
-        elif not self.controller.is_running:
-            self._append_terminal_centered(FREE_SOFTWARE_MESSAGE)
 
     def _on_running_changed(self, running: bool, pid: int):
         del pid
@@ -2003,6 +2003,29 @@ class FarmerTab(QWidget):
             self._sp_clears_bar.setMaximum(100)
             self._sp_clears_bar.setValue(0)
 
+        # Wins / Loss / Total / Win Rate
+        wins   = snapshot.session_clears
+        losses = snapshot.session_losses
+        total  = wins + losses
+        rate   = int(wins / total * 100) if total > 0 else 0
+        self._sp_wins_lbl.setText(str(wins))
+        self._sp_loss_lbl.setText(str(losses))
+        self._sp_total_lbl.setText(str(total))
+        self._sp_winrate_lbl.setText(f"{rate}%")
+        self._sp_winrate_bar.setValue(rate)
+
+        # Stamina Pots
+        pots = snapshot.session_pots
+        self._sp_pots_lbl.setText(str(pots))
+        max_pots_raw = self.controller.get_arg_values().get("max_stamina_pots")
+        try:
+            max_pots = int(float(str(max_pots_raw)))
+            self._sp_pots_bar.setMaximum(max_pots)
+            self._sp_pots_bar.setValue(min(pots, max_pots))
+        except (TypeError, ValueError):
+            self._sp_pots_bar.setMaximum(max(pots, 1))
+            self._sp_pots_bar.setValue(pots)
+
     def _on_status_snapshot_changed(self, _snapshot):
         if not self._syncing_arg_widgets:
             self._refresh_session_progress()
@@ -2010,6 +2033,8 @@ class FarmerTab(QWidget):
     def _sync_from_controller(self):
         self._sync_arg_widgets(self.controller.get_arg_values())
         self._on_output_reset()
+        if not self.controller.output_lines and self.controller.process is None:
+            self._append_terminal_centered(FREE_SOFTWARE_MESSAGE)
         self._on_running_changed(self.controller.is_running, self.controller.process_id)
         self._on_paused_changed(self.controller.is_paused)
         self._refresh_session_progress()

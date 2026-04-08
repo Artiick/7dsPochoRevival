@@ -307,6 +307,7 @@ class DemonicBeastFarmer(IFarmer, abc.ABC):
                 # Transition to another state or perform clean-up actions
                 if DemonicBeastFarmer.current_floor == 1:  # Since we updated it already beforehand!
                     DemonicBeastFarmer.num_floor_3_victories += 1
+                    print("[CLEAR]")
 
                     # Check if we need to exit the farmer due to reaching the max number of desired floor 3 clears
                     if DemonicBeastFarmer.num_floor_3_victories >= self.max_floor_3_clears:
@@ -324,6 +325,7 @@ class DemonicBeastFarmer(IFarmer, abc.ABC):
 
             else:
                 print("The Demonic Beast fighter told me we lost... :/")
+                print("[LOSS]")
                 # print("Resetting the team in case the saved team has very little health")
                 DemonicBeastFarmer.num_losses += 1
                 IFarmer.dict_of_defeats[f"Floor {DemonicBeastFarmer.current_floor} Phase {phase}"] += 1

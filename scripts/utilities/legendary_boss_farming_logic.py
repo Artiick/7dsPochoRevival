@@ -157,6 +157,7 @@ class LegendaryBossFarmer(IFarmer):
         if find(vio.again, screenshot):
             LegendaryBossFarmer.num_fights += 1
             print(f"LB cleared! {LegendaryBossFarmer.num_fights} times so far.")
+            print("[CLEAR]")
 
             # Now, exit the fight if we've reached the desired number of runs
             if LegendaryBossFarmer.num_fights >= self.max_num_runs:
@@ -169,6 +170,7 @@ class LegendaryBossFarmer(IFarmer):
 
         elif find(vio.failed, screenshot):
             print("Oh no, we have lost :( Retrying...")
+            print("[LOSS]")
             self.current_state = States.IN_LEGENDARY_BOSS_MENU
 
         else:

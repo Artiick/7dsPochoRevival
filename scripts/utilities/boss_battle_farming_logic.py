@@ -125,6 +125,7 @@ class BossBattleFarmer(IFarmer):
             BossBattleFarmer.num_runs_complete += 1
             BossBattleFarmer.finished_run_lockout_until = now + 5.0
             print(f"We've completed {BossBattleFarmer.num_runs_complete} runs so far.")
+            print("[CLEAR]")
             self.keep_alive(120, "Completed a run, going next")  # reset the runtime watchdog since we're making progress
 
         # We may need to restore stamina
