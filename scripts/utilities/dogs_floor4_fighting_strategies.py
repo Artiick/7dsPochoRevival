@@ -326,20 +326,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print(f"{played_st_gauge_ids.size} GOLD played and {st_gauge_ids.size} GOLD in hand.")
                 return self._smarter_phase3(hand_of_cards, picked_cards)
 
-            # Escalin talent (gauge removal): Roxy — play SILVER/GOLD roxy_st if playable; else Nasi ult if SILVER/GOLD roxy_st is DISABLED; else talent.
-            if type(self).roxy_in_team and not DogsFloor4BattleStrategy.taunt_removed:
-                roxy_st_sg_ranks = (CardRanks.SILVER, CardRanks.GOLD)
-                playable_roxy_st = self._matching_card_ids(hand_of_cards, ("roxy_st",), ranks=roxy_st_sg_ranks)
-                if playable_roxy_st:
-                    print("Phase 3: playing SILVER/GOLD roxy_st instead of Escalin talent")
-                    DogsFloor4BattleStrategy.taunt_removed = True
-                    return playable_roxy_st[-1]
-                roxy_st_idx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_sg_ranks)
-                nasiens_ult_here = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
-                if nasiens_ult_here and any(hand_of_cards[int(i)].card_type == CardTypes.DISABLED for i in roxy_st_idx):
-                    print("Phase 3: Nasi ult to unlock DISABLED SILVER/GOLD roxy_st")
-                    return nasiens_ult_here[-1]
-
             if (
                 not DogsFloor4BattleStrategy.taunt_removed
                 and find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6)
