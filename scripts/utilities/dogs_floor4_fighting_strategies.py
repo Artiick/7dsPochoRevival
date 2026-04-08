@@ -99,11 +99,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     def get_next_card_index_phase1(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int):
         self._maybe_reset("phase_1")
 
-        # Let's start with Escalin's talent
-        screenshot, window_location = capture_window()
-        if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
-            print("Phase 3: activating Escalin talent!")
-            time.sleep(2.5)
+        # Let's start with Escalin's talent only on turn 2-onwards
+        if IBattleStrategy.fight_turn > 1:
+            screenshot, window_location = capture_window()
+            if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+                print("Phase 3: activating Escalin talent!")
+                time.sleep(2.5)
 
         # Phase 1: First turn, play a sequence of cards
         if IBattleStrategy.fight_turn == 1:
@@ -198,14 +199,19 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             for i, card in enumerate(picked_cards)
             if card.card_type == CardTypes.ATTACK_DEBUFF and card.card_rank in (CardRanks.SILVER, CardRanks.GOLD)
         ]
-        # On even turns, we have to disable stance cancel cards!
-        if len(attack_debuff_ids) > 0 and IBattleStrategy.fight_turn % 2 == 0:
-            hand_of_cards[attack_debuff_ids[-1]].card_type = CardTypes.GROUND
-            print("Disabling one stance cancel card.")
-        elif len(attack_debuff_ids) > 0 and not len(played_attack_debuff_ids):
-            # Let's try to play an ATTACK_DEBUFF card to remove stance
-            print("Playing an ATTACK_DEBUFF card to remove stance!")
-            return attack_debuff_ids[-1]
+        even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
+        if attack_debuff_ids:
+            last_ad = attack_debuff_ids[-1]
+            # On even turns, we have to disable stance cancel cards!
+            if even_fight_turn:
+                hand_of_cards[last_ad].card_type = CardTypes.GROUND
+                print("Disabling one stance cancel card.")
+            elif not played_attack_debuff_ids:
+                print("Playing an ATTACK_DEBUFF card to remove stance!")
+                return last_ad
+            else:
+                hand_of_cards[last_ad].card_type = CardTypes.GROUND
+                print("Grounding one attack debuff card.")
 
         # Do not play Nasiens ult: mark it GROUND so SmarterBattleStrategy skips it (same idea as Escalin above).
         for i in nasiens_ids:
