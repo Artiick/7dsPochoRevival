@@ -271,11 +271,11 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             and not DogsFloor4BattleStrategy.removed_damage_cap
             and not DogsFloor4BattleStrategy.taunt_removed
         ):
-            roxy_st_ids = self._tr(hand_of_cards, ("roxy_st",), (CardRanks.SILVER, CardRanks.GOLD))
-            if roxy_st_ids.size > 0:
+            roxy_st_ids = self._matching_card_ids(hand_of_cards, ("roxy_st",), (CardRanks.SILVER, CardRanks.GOLD))
+            if len(roxy_st_ids) > 0:
                 DogsFloor4BattleStrategy.taunt_removed = True
                 print("Removing taunt with Roxy!")
-                return int(roxy_st_ids[-1])
+                return roxy_st_ids[-1]
 
             # We haven't removed the taunt and don't have a good Roxy ST saved to remove it...
             drag = self._best_merge_drag_indices(
