@@ -290,7 +290,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
         if len(nasiens_ult_id) > 0 and not DogsFloor4BattleStrategy.removed_damage_cap:
-            return nasiens_ult_id[-1]
+            if IBattleStrategy.fight_turn > 1:
+                return nasiens_ult_id[-1]
+            # Disable Nasiens ultimate for the next turn
+            hand_of_cards[nasiens_ult_id[-1]].card_type = CardTypes.GROUND
 
         # Merge ST gauge cards if possible
         if IBattleStrategy.fight_turn <= 2:
