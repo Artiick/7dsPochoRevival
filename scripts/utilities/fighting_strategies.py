@@ -200,6 +200,10 @@ class SmarterBattleStrategy(IBattleStrategy):
         if len(attack_ids):
             return attack_ids[-1]
 
+        if hand_of_cards and all(card.card_type == CardTypes.GROUND for card in hand_of_cards):
+            print("All cards are ground, moving the two rightmost cards...")
+            return [-1, -2]
+
         if all(card.card_type in [CardTypes.GROUND, CardTypes.DISABLED] for card in hand_of_cards):
             print("We only have ground and disabled cards, let's play the rightmost disabled card...")
             disabled_ids = [i for i, card in enumerate(hand_of_cards) if card.card_type == CardTypes.DISABLED]

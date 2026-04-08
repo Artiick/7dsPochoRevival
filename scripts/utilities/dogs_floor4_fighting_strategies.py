@@ -88,24 +88,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if len(lillia_aoe_ids) > 0:
                 hand_of_cards[lillia_aoe_ids[-1]].card_type = CardTypes.GROUND
 
-        # # Disable any playable card between two ST gauges if playing it would merge those neighbors.
-        # for i in range(1, len(hand_of_cards) - 1):
-        #     mid = hand_of_cards[i]
-        #     if mid.card_type in (CardTypes.GROUND, CardTypes.DISABLED, CardTypes.NONE):
-        #         continue
-        #     L, R = hand_of_cards[i - 1], hand_of_cards[i + 1]
-        #     if not (
-        #         self._card_matches_any(L, ST_GAUGE_TEMPLATES)
-        #         and self._card_matches_any(R, ST_GAUGE_TEMPLATES)
-        #     ):
-        #         continue
-        #     a, b = copy(L), copy(R)
-        #     for c in (a, b):
-        #         if c.card_type == CardTypes.GROUND:
-        #             c.card_type = CardTypes.ATTACK
-        #     if determine_card_merge(a, b):
-        #         mid.card_type = CardTypes.DISABLED
-
         # Phase-specify logic here
 
         if phase == 1:
@@ -217,10 +199,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if card.card_type == CardTypes.ATTACK_DEBUFF and card.card_rank in (CardRanks.SILVER, CardRanks.GOLD)
         ]
         # On even turns, we have to disable stance cancel cards!
-        if IBattleStrategy.fight_turn % 2 == 0:
-            if len(attack_debuff_ids) > 0:
-                hand_of_cards[attack_debuff_ids[-1]].card_type = CardTypes.GROUND
-                print("Disabling one stance cancel card.")
+        if len(attack_debuff_ids) > 0 and IBattleStrategy.fight_turn % 2 == 0:
+            hand_of_cards[attack_debuff_ids[-1]].card_type = CardTypes.GROUND
+            print("Disabling one stance cancel card.")
         elif len(attack_debuff_ids) > 0 and not len(played_attack_debuff_ids):
             # Let's try to play an ATTACK_DEBUFF card to remove stance
             print("Playing an ATTACK_DEBUFF card to remove stance!")
@@ -243,10 +224,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             rx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
             if rx.size > 0:
                 hand_of_cards[int(rx[-1])].card_type = CardTypes.DISABLED
-
-        # If still all hand is GROUND, move two rightmost cards
-        if hand_of_cards and all(c.card_type == CardTypes.GROUND for c in hand_of_cards):
-            return [-1, -2]
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
@@ -271,7 +248,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             and not DogsFloor4BattleStrategy.removed_damage_cap
             and not DogsFloor4BattleStrategy.taunt_removed
         ):
-            roxy_st_ids = self._matching_card_ids(hand_of_cards, ("roxy_st",), (CardRanks.SILVER, CardRanks.GOLD))
+            roxy_st_ids = self._matching_card_ids(hand_of_cards, ("roxy_st",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
             if len(roxy_st_ids) > 0:
                 DogsFloor4BattleStrategy.taunt_removed = True
                 print("Removing taunt with Roxy!")
@@ -290,10 +267,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
         if len(nasiens_ult_id) > 0 and not DogsFloor4BattleStrategy.removed_damage_cap:
-            if IBattleStrategy.fight_turn > 1:
-                return nasiens_ult_id[-1]
-            # Disable Nasiens ultimate for the next turn
-            hand_of_cards[nasiens_ult_id[-1]].card_type = CardTypes.GROUND
+            return nasiens_ult_id[-1]
 
         # Merge ST gauge cards if possible
         if IBattleStrategy.fight_turn <= 2:
@@ -429,14 +403,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             roxy_st_saveable = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
             if roxy_st_saveable.size > 0:
                 hand_of_cards[int(roxy_st_saveable[-1])].card_type = CardTypes.GROUND
-
-        # If ALL are ground, just move a card...
-        if hand_of_cards and all(c.card_type == CardTypes.GROUND for c in hand_of_cards):
-            print("All cards are ground, just moving a card...")
-            return [-1, -2]
-            # rx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
-            # if rx.size > 0:
-            #     hand_of_cards[int(rx[-1])].card_type = CardTypes.DISABLED
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
