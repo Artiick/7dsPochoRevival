@@ -161,6 +161,21 @@ def _save_theme(name: str):
     with open(_THEME_FILE, "w") as _f:
         _f.write(name)
 
+
+def _restart_application() -> bool:
+    if getattr(sys, "frozen", False):
+        program = sys.executable
+        args = sys.argv[1:]
+    else:
+        program = sys.executable
+        entrypoint = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else os.path.abspath(__file__)
+        args = [entrypoint] + sys.argv[1:]
+
+    started = QProcess.startDetached(program, args, _BASE_DIR)
+    if isinstance(started, tuple):
+        return started[0]
+    return bool(started)
+
 _ACTIVE_THEME = _load_theme()
 C = C_LIGHT if _ACTIVE_THEME == "light" else C_DARK
 
@@ -2555,7 +2570,14 @@ class MainWindow(QMainWindow):
             )
             return
         _save_theme("light" if _ACTIVE_THEME == "dark" else "dark")
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        if not _restart_application():
+            QMessageBox.critical(
+                self,
+                "Theme Change Failed",
+                "The theme was saved, but the GUI could not be reopened automatically.",
+            )
+            return
+        QApplication.instance().quit()
 
     def _toggle_view(self):
         if self.stack.currentWidget() is self.list_view:
