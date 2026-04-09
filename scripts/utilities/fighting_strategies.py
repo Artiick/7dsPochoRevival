@@ -74,7 +74,7 @@ class IBattleStrategy(abc.ABC):
 
             elif isinstance(next_index, (tuple, list)):
                 # Make sure both numbers are part of a circular buffer
-                next_index = [next_index[0] % 8, next_index[1] % 8]
+                next_index = [next_index[0] % len(hand_of_cards), next_index[1] % len(hand_of_cards)]
                 # print(f"Moving cards: {next_index}")
 
             # Update the indices and cards lists

@@ -80,17 +80,16 @@ def development():
 
     # print(f"We have {count_empty_card_slots_2()} empty card slots")
 
-    # hand_image = capture_hand_image()
-    # display_image(hand_image)
     # empty_slots = count_empty_card_slots(screenshot)
     # print("We have these many empty slots:", empty_slots)
 
-    # cards = get_hand_cards(num_units=3)
-    # for i, card in enumerate(cards, start=0):
-    #     card_interior = get_card_type_image(card.card_image, num_units=3)
-
-    #     print(f"Is {card.card_type.name} Meli's?", is_Meli_card(card))
-    #     print(card.card_type.name, card.card_rank.name)
+    cards = get_hand_cards(num_units=4)
+    for i, card in enumerate(cards, start=0):
+        card_interior = get_card_type_image(card.card_image, num_units=4)
+        display_image(card_interior)
+        print(card.card_type.name, card.card_rank.name)
+    hand_image = capture_hand_image()
+    display_image(hand_image)
 
     #     # print(card.card_image.shape)
 

@@ -3,7 +3,6 @@ from collections.abc import Sequence
 from copy import copy, deepcopy
 from typing import Final
 
-import numpy as np
 import utilities.vision_images as vio
 from utilities.card_data import Card, CardRanks, CardTypes
 from utilities.coordinates import Coordinates
@@ -84,14 +83,15 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         else:
             # Lillia teams: save the best AOE in phases 1/2, but hide all AOEs in phase 3 until cap-removal logic uses one.
-            lillia_aoe_ids = sorted(
-                [i for i, card in enumerate(hand_of_cards) if self._card_matches_any(card, ("lillia_aoe",))],
-                key=lambda idx: (hand_of_cards[idx].card_rank.value, idx),
+            lillia_aoe_ids = self._matching_card_ids(
+                hand_of_cards,
+                ("lillia_aoe",),
+                include_unplayable=True,
             )
             if phase == 3:
                 for i in lillia_aoe_ids:
                     hand_of_cards[i].card_type = CardTypes.GROUND
-            elif len(lillia_aoe_ids) > 0:
+            elif lillia_aoe_ids:
                 hand_of_cards[lillia_aoe_ids[-1]].card_type = CardTypes.GROUND
 
         # Phase-specify logic here
@@ -113,15 +113,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 time.sleep(2.5)
 
         # First, play an attack debuff if we can
-        attack_debuff_ids = [
-            i
-            for i, card in enumerate(hand_of_cards)
-            if card.card_type == CardTypes.ATTACK_DEBUFF and card.card_rank in (CardRanks.SILVER, CardRanks.GOLD)
-        ]
+        attack_debuff_ids = [i for i, card in enumerate(hand_of_cards) if card.card_type == CardTypes.ATTACK_DEBUFF]
         played_attack_debuff_ids = [
-            i
-            for i, card in enumerate(picked_cards)
-            if card.card_type == CardTypes.ATTACK_DEBUFF and card.card_rank in (CardRanks.SILVER, CardRanks.GOLD)
+            i for i, card in enumerate(picked_cards) if card.card_type == CardTypes.ATTACK_DEBUFF
         ]
         even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
         if attack_debuff_ids:
@@ -232,15 +226,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 return drag
 
         # Play or disable stance cancel cards if needed
-        attack_debuff_ids = [
-            i
-            for i, card in enumerate(hand_of_cards)
-            if card.card_type == CardTypes.ATTACK_DEBUFF and card.card_rank in (CardRanks.SILVER, CardRanks.GOLD)
-        ]
+        attack_debuff_ids = [i for i, card in enumerate(hand_of_cards) if card.card_type == CardTypes.ATTACK_DEBUFF]
         played_attack_debuff_ids = [
-            i
-            for i, card in enumerate(picked_cards)
-            if card.card_type == CardTypes.ATTACK_DEBUFF and card.card_rank in (CardRanks.SILVER, CardRanks.GOLD)
+            i for i, card in enumerate(picked_cards) if card.card_type == CardTypes.ATTACK_DEBUFF
         ]
         even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
         if attack_debuff_ids:
@@ -262,14 +250,24 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # Phase 2: Tuck one SILVER/GOLD roxy_st so Smarter skips it (same pattern as _smarter_phase3).
         roxy_st_hi = (CardRanks.SILVER, CardRanks.GOLD)
         if type(self).roxy_in_team:
-            roxy_st_saveable = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
-            if roxy_st_saveable.size > 0:
-                hand_of_cards[int(roxy_st_saveable[-1])].card_type = CardTypes.GROUND
+            roxy_st_saveable = self._matching_card_ids(
+                hand_of_cards,
+                ("roxy_st",),
+                ranks=roxy_st_hi,
+                include_unplayable=True,
+            )
+            if roxy_st_saveable:
+                hand_of_cards[roxy_st_saveable[-1]].card_type = CardTypes.GROUND
         # All-GROUND confuses downstream; unstick one SILVER/GOLD roxy_st to DISABLED if needed.
         if hand_of_cards and all(c.card_type == CardTypes.GROUND for c in hand_of_cards):
-            rx = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
-            if rx.size > 0:
-                hand_of_cards[int(rx[-1])].card_type = CardTypes.DISABLED
+            rx = self._matching_card_ids(
+                hand_of_cards,
+                ("roxy_st",),
+                ranks=roxy_st_hi,
+                include_unplayable=True,
+            )
+            if rx:
+                hand_of_cards[rx[-1]].card_type = CardTypes.DISABLED
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
@@ -339,23 +337,43 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         print("Do we still have a damage cap?", has_damage_cap, " Do we see it?", find(vio.dogs_damage_cap, screenshot))
         if has_damage_cap:
             # First, check if we've played enough
-            played_st_gauge_ids = self._tr(picked_cards, ST_GAUGE_TEMPLATES, (CardRanks.GOLD,))
-            played_lillia_ids = self._tr(picked_cards, ("lillia_aoe",), (CardRanks.GOLD,))
-            if played_st_gauge_ids.size >= 2 or played_lillia_ids.size >= 1:
+            played_st_gauge_ids = self._matching_card_ids(
+                picked_cards,
+                ST_GAUGE_TEMPLATES,
+                ranks=(CardRanks.GOLD,),
+                include_unplayable=True,
+            )
+            played_lillia_ids = self._matching_card_ids(
+                picked_cards,
+                ("lillia_aoe",),
+                ranks=(CardRanks.GOLD,),
+                include_unplayable=True,
+            )
+            if len(played_st_gauge_ids) >= 2 or played_lillia_ids:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
                 DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = IBattleStrategy.fight_turn + 1
                 return self._smarter_phase3(hand_of_cards, picked_cards)
 
-            st_gauge_ids = self._tr(hand_of_cards, ST_GAUGE_TEMPLATES, (CardRanks.GOLD,))
-            lillia_aoe_ids = self._tr(hand_of_cards, ("lillia_aoe",), (CardRanks.GOLD,))
+            st_gauge_ids = self._matching_card_ids(
+                hand_of_cards,
+                ST_GAUGE_TEMPLATES,
+                ranks=(CardRanks.GOLD,),
+                include_unplayable=True,
+            )
+            lillia_aoe_ids = self._matching_card_ids(
+                hand_of_cards,
+                ("lillia_aoe",),
+                ranks=(CardRanks.GOLD,),
+                include_unplayable=True,
+            )
             print(
                 "These many gold ST gauge and lillia_aoe cards available:",
-                st_gauge_ids.size,
-                lillia_aoe_ids.size,
+                len(st_gauge_ids),
+                len(lillia_aoe_ids),
             )
 
             # Count GOLD ST gauge in hand plus already played this turn (picked_cards).
-            if lillia_aoe_ids.size == 0 and (played_st_gauge_ids.size + st_gauge_ids.size) < 2:
+            if not lillia_aoe_ids and (len(played_st_gauge_ids) + len(st_gauge_ids)) < 2:
                 drag = self._best_merge_drag_indices(
                     hand_of_cards, ST_GAUGE_TEMPLATES, log_label="gauge merge (insufficient gold)"
                 )
@@ -364,13 +382,13 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                         hand_of_cards,
                         drag,
                         card_turn=card_turn,
-                        played_gold_st_gauge_count=int(played_st_gauge_ids.size),
+                        played_gold_st_gauge_count=len(played_st_gauge_ids),
                         screenshot=screenshot,
                         window_location=window_location,
                     )
                     return drag
                 print("Not enough gold cards to remove gauges...")
-                print(f"{played_st_gauge_ids.size} GOLD played and {st_gauge_ids.size} GOLD in hand.")
+                print(f"{len(played_st_gauge_ids)} GOLD played and {len(st_gauge_ids)} GOLD in hand.")
                 return self._smarter_phase3(hand_of_cards, picked_cards)
 
             if (
@@ -383,28 +401,28 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 DogsFloor4BattleStrategy.taunt_removed = True
                 time.sleep(2.5)
 
-            if played_st_gauge_ids.size == 1:
+            if len(played_st_gauge_ids) == 1:
                 # Gotta click light dog after we've played the first remove gauge card
                 print("Clicking light dog after playing the first remove gauge card!")
                 click_im(Coordinates.get_coordinates("light_dog"), window_location)
                 time.sleep(1)
 
-            if lillia_aoe_ids.size:
+            if lillia_aoe_ids:
                 DogsFloor4BattleStrategy.removed_damage_cap = True
                 DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = IBattleStrategy.fight_turn + 1
                 print("Playing a GOLD Lillia card!")
-                return int(lillia_aoe_ids[-1])
+                return lillia_aoe_ids[-1]
 
-            if played_st_gauge_ids.size <= 1:
+            if len(played_st_gauge_ids) <= 1:
                 if not DogsFloor4BattleStrategy.taunt_removed:
                     print("We have enough gold cards but taunt isn't removed :(")
                     return self._smarter_phase3(hand_of_cards, picked_cards)
 
                 # Play gold ST gauge cards (two total to clear cap when no Lillia AOE).
-                st_gauge_pick_id = int(st_gauge_ids[-1]) if st_gauge_ids.size else -1
+                st_gauge_pick_id = st_gauge_ids[-1] if st_gauge_ids else -1
                 if st_gauge_pick_id != -1:
                     print("Playing a GOLD ST gauge card!")
-                    if played_st_gauge_ids.size == 1:
+                    if len(played_st_gauge_ids) == 1:
                         DogsFloor4BattleStrategy.removed_damage_cap = True
                         DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn = (
                             IBattleStrategy.fight_turn + 1
@@ -473,9 +491,14 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 hand_of_cards[i].card_type = CardTypes.GROUND
         # Pre-cap: hide one high-rank Roxy ST from Smarter until phase-3 logic plays it.
         if type(self).roxy_in_team and not DogsFloor4BattleStrategy.removed_damage_cap:
-            roxy_st_saveable = self._tr(hand_of_cards, ("roxy_st",), roxy_st_hi)
-            if roxy_st_saveable.size > 0:
-                hand_of_cards[int(roxy_st_saveable[-1])].card_type = CardTypes.GROUND
+            roxy_st_saveable = self._matching_card_ids(
+                hand_of_cards,
+                ("roxy_st",),
+                ranks=roxy_st_hi,
+                include_unplayable=True,
+            )
+            if roxy_st_saveable:
+                hand_of_cards[roxy_st_saveable[-1]].card_type = CardTypes.GROUND
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
@@ -512,8 +535,13 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 card.card_type = CardTypes.ATTACK
 
         future_hand = self._update_hand_of_cards(future_hand, [drag])
-        future_gold_st_gauge_ids = self._tr(future_hand, ST_GAUGE_TEMPLATES, (CardRanks.GOLD,))
-        if played_gold_st_gauge_count + future_gold_st_gauge_ids.size < 2:
+        future_gold_st_gauge_ids = self._matching_card_ids(
+            future_hand,
+            ST_GAUGE_TEMPLATES,
+            ranks=(CardRanks.GOLD,),
+            include_unplayable=True,
+        )
+        if played_gold_st_gauge_count + len(future_gold_st_gauge_ids) < 2:
             return
 
         if screenshot is None or window_location is None:
@@ -523,33 +551,31 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             DogsFloor4BattleStrategy.taunt_removed = True
             time.sleep(2.5)
 
-    def _tr(self, cards: list[Card], templates: Sequence[str], ranks: Sequence[CardRanks]) -> np.ndarray:
-        """Indices where template matches and card rank is in ``ranks`` (any ``card_type``)."""
-        if not ranks:
-            return np.array([], dtype=np.intp)
-        r = np.array([c.card_rank.value for c in cards])
-        allowed = np.array([x.value for x in ranks])
-        template_ok = np.array([self._card_matches_any(c, templates) for c in cards])
-        return np.where(template_ok & np.isin(r, allowed))[0]
-
     def _matching_card_ids(
         self,
         hand_of_cards: list[Card],
         template_names: Sequence[str],
         *,
         ranks: Sequence[CardRanks] | None = None,
+        include_unplayable: bool = False,
     ) -> list[int]:
+        """Return matching card indices sorted by ``(rank, index)`` ascending.
+
+        By default this only returns cards that are currently playable by the
+        generic strategy. Set ``include_unplayable=True`` when phase logic needs
+        to inspect matching cards regardless of their current ``card_type``.
+        """
         allowed_ranks = frozenset(ranks) if ranks is not None else None
-        return sorted(
-            [
-                idx
-                for idx, card in enumerate(hand_of_cards)
-                if card.card_type not in (CardTypes.DISABLED, CardTypes.NONE, CardTypes.GROUND)
-                and self._card_matches_any(card, template_names)
-                and (allowed_ranks is None or card.card_rank in allowed_ranks)
-            ],
-            key=lambda idx: (hand_of_cards[idx].card_rank.value, idx),
-        )
+        blocked_types = () if include_unplayable else (CardTypes.DISABLED, CardTypes.NONE, CardTypes.GROUND)
+        matching_ids = [
+            idx
+            for idx, card in enumerate(hand_of_cards)
+            if card.card_type not in blocked_types
+            and self._card_matches_any(card, template_names)
+            and (allowed_ranks is None or card.card_rank in allowed_ranks)
+        ]
+        matching_ids.sort(key=lambda idx: (hand_of_cards[idx].card_rank.value, idx))
+        return matching_ids
 
     def _best_merge_drag_indices(
         self,
