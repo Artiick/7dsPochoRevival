@@ -19,6 +19,7 @@ ESCALIN_TEMPLATES: Final[tuple[str, ...]] = ("escalin_st", "escalin_aoe", "escal
 ROXY_TEMPLATES: Final[tuple[str, ...]] = ("roxy_st", "roxy_aoe", "roxy_ult")
 NASI_TEMPLATES: Final[tuple[str, ...]] = ("nasi_heal", "nasi_stun", "nasi_ult")
 THONAR_TEMPLATES: Final[tuple[str, ...]] = ("thonar_stance", "thonar_gauge", "thonar_ult")
+STANCE_CONTROL_TEMPLATES: Final[tuple[str, ...]] = ("nasi_stun", "thonar_stance")
 # Single-target gauge templates (thonar_gauge, cusack_gauge): same cap-removal / merge / GROUND rules as each other; Lillia AOE separate.
 ST_GAUGE_TEMPLATES: Final[tuple[str, ...]] = ("thonar_gauge", "cusack_gauge")
 GAUGE_REMOVAL_TEMPLATES: Final[tuple[str, ...]] = (*ST_GAUGE_TEMPLATES, "lillia_aoe")
@@ -112,11 +113,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print("Phase 3: activating Escalin talent!")
                 time.sleep(2.5)
 
-        # First, play an attack debuff if we can
-        attack_debuff_ids = [i for i, card in enumerate(hand_of_cards) if card.card_type == CardTypes.ATTACK_DEBUFF]
-        played_attack_debuff_ids = [
-            i for i, card in enumerate(picked_cards) if card.card_type == CardTypes.ATTACK_DEBUFF
-        ]
+        # First, play one stance-control card on odd turns; otherwise hide them from Smarter.
+        attack_debuff_ids = self._matching_card_ids(hand_of_cards, STANCE_CONTROL_TEMPLATES)
+        played_attack_debuff_ids = self._matching_card_ids(picked_cards, STANCE_CONTROL_TEMPLATES)
         even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
         if attack_debuff_ids:
             last_ad = attack_debuff_ids[-1]
@@ -125,7 +124,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 hand_of_cards[last_ad].card_type = CardTypes.GROUND
                 print("Disabling stance cancel cards.")
             else:
-                print("Playing an ATTACK_DEBUFF card to remove stance!")
+                print("Playing a stance-control card to remove stance!")
                 return last_ad
 
         # Phase 1: First turn, play a sequence of cards
@@ -212,11 +211,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if drag is not None:
                 return drag
 
-        # Play or disable stance cancel cards if needed
-        attack_debuff_ids = [i for i, card in enumerate(hand_of_cards) if card.card_type == CardTypes.ATTACK_DEBUFF]
-        played_attack_debuff_ids = [
-            i for i, card in enumerate(picked_cards) if card.card_type == CardTypes.ATTACK_DEBUFF
-        ]
+        # Play one stance-control card on odd turns; otherwise hide them from Smarter.
+        attack_debuff_ids = self._matching_card_ids(hand_of_cards, STANCE_CONTROL_TEMPLATES)
+        played_attack_debuff_ids = self._matching_card_ids(picked_cards, STANCE_CONTROL_TEMPLATES)
         even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
         if attack_debuff_ids:
             last_ad = attack_debuff_ids[-1]
@@ -225,7 +222,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 hand_of_cards[last_ad].card_type = CardTypes.GROUND
                 print("Disabling stance cancel cards.")
             else:
-                print("Playing an ATTACK_DEBUFF card to remove stance!")
+                print("Playing a stance-control card to remove stance!")
                 return last_ad
 
         # Do not play Nasiens ult: mark it GROUND so SmarterBattleStrategy skips it (same idea as Escalin above).
