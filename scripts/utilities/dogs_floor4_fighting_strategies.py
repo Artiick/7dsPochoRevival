@@ -71,7 +71,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             # Mark ST gauge cards GROUND so Smarter skips them unless phase logic explicitly plays them.
             ids = [i for i, c in enumerate(hand_of_cards) if self._card_matches_any(c, ST_GAUGE_TEMPLATES)]
             if ids:
-                n_gold = sum(1 for i in ids if hand_of_cards[i].card_rank == CardRanks.GOLD)
+                n_gold = sum(bool(hand_of_cards[i].card_rank == CardRanks.GOLD) for i in ids)
                 if n_gold <= 1:
                     # Single (or no) gold: reserve every ST gauge — nothing safe to leave playable.
                     to_ground = ids
@@ -116,9 +116,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # First, play one stance-control card on odd turns; otherwise hide them from Smarter.
         attack_debuff_ids = self._matching_card_ids(hand_of_cards, STANCE_CONTROL_TEMPLATES)
         played_attack_debuff_ids = self._matching_card_ids(picked_cards, STANCE_CONTROL_TEMPLATES)
-        even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
         if attack_debuff_ids:
             last_ad = attack_debuff_ids[-1]
+            even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
             # Even turns: disable stance cancel. Odd + already played one: ground another. Odd + none played: play one.
             if even_fight_turn or played_attack_debuff_ids:
                 hand_of_cards[last_ad].card_type = CardTypes.GROUND
@@ -198,9 +198,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         print(f"Phase 2: fight turn {IBattleStrategy.fight_turn}")
 
         nasiens_ids = self._matching_card_ids(hand_of_cards, NASI_TEMPLATES)
-        has_nasiens_ult = any(self._card_matches_any(hand_of_cards[i], ("nasi_ult",)) for i in nasiens_ids)
-
         if card_turn == 0:
+            has_nasiens_ult = any(self._card_matches_any(hand_of_cards[i], ("nasi_ult",)) for i in nasiens_ids)
+
             # If we still have no nasi_ult in hand, try to reshuffle: move the first non-GROUND Nasiens card one slot right.
             if not has_nasiens_ult and len(nasiens_ids) > 0:
                 print("Moving Nasiens card to get ult...")
@@ -214,9 +214,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # Play one stance-control card on odd turns; otherwise hide them from Smarter.
         attack_debuff_ids = self._matching_card_ids(hand_of_cards, STANCE_CONTROL_TEMPLATES)
         played_attack_debuff_ids = self._matching_card_ids(picked_cards, STANCE_CONTROL_TEMPLATES)
-        even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
         if attack_debuff_ids:
             last_ad = attack_debuff_ids[-1]
+            even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
             # Even turns: disable stance cancel. Odd + already played one: ground another. Odd + none played: play one.
             if even_fight_turn or played_attack_debuff_ids:
                 hand_of_cards[last_ad].card_type = CardTypes.GROUND
@@ -234,24 +234,22 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # Phase 2: Tuck one SILVER/GOLD roxy_st so Smarter skips it (same pattern as _smarter_phase3).
         roxy_st_hi = (CardRanks.SILVER, CardRanks.GOLD)
         if type(self).roxy_in_team:
-            roxy_st_saveable = self._matching_card_ids(
+            if roxy_st_saveable := self._matching_card_ids(
                 hand_of_cards,
                 ("roxy_st",),
                 ranks=roxy_st_hi,
                 include_unplayable=True,
-            )
-            if roxy_st_saveable:
+            ):
                 hand_of_cards[roxy_st_saveable[-1]].card_type = CardTypes.GROUND
         # All-GROUND confuses downstream; unstick one SILVER/GOLD roxy_st to DISABLED if needed.
         if hand_of_cards and all(c.card_type == CardTypes.GROUND for c in hand_of_cards):
-            rx = self._matching_card_ids(
+            if rx := self._matching_card_ids(
                 hand_of_cards,
                 ("roxy_st",),
                 ranks=roxy_st_hi,
                 include_unplayable=True,
-            )
-            if rx:
-                hand_of_cards[rx[-1]].card_type = CardTypes.DISABLED
+            ):
+                hand_of_cards[rx[0]].card_type = CardTypes.DISABLED
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
@@ -450,8 +448,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 ("roxy_st", "roxy_ult"),
                 ("roxy_aoe",),
             ):
-                ids = self._matching_card_ids(hand_of_cards, templates)
-                if ids:
+                if ids := self._matching_card_ids(hand_of_cards, templates):
                     return ids[-1]
 
         return self._smarter_phase3(hand_of_cards, picked_cards)
@@ -467,22 +464,21 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         roxy_st_hi = (CardRanks.SILVER, CardRanks.GOLD)
         escalin_hide_type = CardTypes.GROUND if type(self).lillia_in_team else CardTypes.DISABLED
         # Keep Escalin off Smarter's pick list for this delegation.
-        for i in range(len(hand_of_cards)):
-            if self._card_matches_any(hand_of_cards[i], ("escalin_st", "escalin_aoe")):
+        for item in hand_of_cards:
+            if self._card_matches_any(item, ("escalin_st", "escalin_aoe")):
                 print("Disabling Escalin cards")
-                hand_of_cards[i].card_type = escalin_hide_type
-            elif self._card_matches_any(hand_of_cards[i], ("escalin_ult",)):
+                item.card_type = escalin_hide_type
+            elif self._card_matches_any(item, ("escalin_ult",)):
                 print("Disabling Escalin ult")
-                hand_of_cards[i].card_type = CardTypes.GROUND
+                item.card_type = CardTypes.GROUND
         # Pre-cap: hide one high-rank Roxy ST from Smarter until phase-3 logic plays it.
         if type(self).roxy_in_team and not DogsFloor4BattleStrategy.removed_damage_cap:
-            roxy_st_saveable = self._matching_card_ids(
+            if roxy_st_saveable := self._matching_card_ids(
                 hand_of_cards,
                 ("roxy_st",),
                 ranks=roxy_st_hi,
                 include_unplayable=True,
-            )
-            if roxy_st_saveable:
+            ):
                 hand_of_cards[roxy_st_saveable[-1]].card_type = CardTypes.GROUND
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
