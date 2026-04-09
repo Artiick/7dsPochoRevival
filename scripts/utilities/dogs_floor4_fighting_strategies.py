@@ -278,6 +278,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 hand_of_cards, GAUGE_REMOVAL_TEMPLATES, log_label="gauge merge (insufficient gold)"
             )
             if drag is not None:
+                self._maybe_activate_escalin_before_gauge_merge(hand_of_cards, drag, card_turn=card_turn)
                 return drag
 
             return self._smarter_phase3(hand_of_cards, picked_cards)
@@ -311,6 +312,14 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     hand_of_cards, GAUGE_REMOVAL_TEMPLATES, log_label="gauge merge (insufficient gold)"
                 )
                 if drag is not None:
+                    self._maybe_activate_escalin_before_gauge_merge(
+                        hand_of_cards,
+                        drag,
+                        card_turn=card_turn,
+                        played_gold_st_gauge_count=int(played_st_gauge_ids.size),
+                        screenshot=screenshot,
+                        window_location=window_location,
+                    )
                     return drag
                 print("Not enough gold cards to remove gauges...")
                 print(f"{played_st_gauge_ids.size} GOLD played and {st_gauge_ids.size} GOLD in hand.")
@@ -366,14 +375,22 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             for i in range(len(hand_of_cards)):
                 if self._card_matches_any(hand_of_cards[i], GAUGE_REMOVAL_TEMPLATES):
                     hand_of_cards[i].card_type = CardTypes.ATTACK
+
             # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
             if IBattleStrategy.fight_turn < DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn:
+
+                # But, we can play Escalin ult if we have it
+                escalin_ult_ids = self._matching_card_ids(hand_of_cards, ("escalin_ult",))
+                if len(escalin_ult_ids) > 0:
+                    return escalin_ult_ids[-1]
+
                 print(
                     f"We can't play HAM cards yet! fight_turn={IBattleStrategy.fight_turn}, "
                     f"HAM allowed when fight_turn >= "
                     f"{DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn}."
                 )
                 return self._smarter_phase3(hand_of_cards, picked_cards)
+
             print("No more damage cap, let's go HAM!")
             for templates in (
                 ("escalin_ult",),
@@ -422,6 +439,36 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
     ) -> int:
         matching_ids = self._matching_card_ids(hand_of_cards, template_names, ranks=ranks)
         return matching_ids[-1] if matching_ids else -1
+
+    def _maybe_activate_escalin_before_gauge_merge(
+        self,
+        hand_of_cards: list[Card],
+        drag: tuple[int, int] | None,
+        *,
+        card_turn: int,
+        played_gold_st_gauge_count: int = 0,
+        screenshot=None,
+        window_location=None,
+    ) -> None:
+        if drag is None or card_turn != 0 or DogsFloor4BattleStrategy.taunt_removed:
+            return
+
+        future_hand = deepcopy(hand_of_cards)
+        for card in future_hand:
+            if self._card_matches_any(card, GAUGE_REMOVAL_TEMPLATES):
+                card.card_type = CardTypes.ATTACK
+
+        future_hand = self._update_hand_of_cards(future_hand, [drag])
+        future_gold_st_gauge_ids = self._tr(future_hand, ST_GAUGE_TEMPLATES, (CardRanks.GOLD,))
+        if played_gold_st_gauge_count + future_gold_st_gauge_ids.size < 2:
+            return
+
+        if screenshot is None or window_location is None:
+            screenshot, window_location = capture_window()
+        if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+            print("Phase 3: activating Escalin talent before gauge merge!")
+            DogsFloor4BattleStrategy.taunt_removed = True
+            time.sleep(2.5)
 
     def _tr(self, cards: list[Card], templates: Sequence[str], ranks: Sequence[CardRanks]) -> np.ndarray:
         """Indices where template matches and card rank is in ``ranks`` (any ``card_type``)."""
