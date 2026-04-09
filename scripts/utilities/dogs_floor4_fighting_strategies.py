@@ -185,24 +185,11 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
                 print("Desired card not found...")
 
-        # fight_turn 1: with two Nasi stuns, burn filler (no Escalin/Roxy/stun); else legacy single-stun tuck.
-        if IBattleStrategy.fight_turn == 2:
-            if type(self).roxy_in_team:
-                nasiens_stance_cancel_id = self._matching_card_ids(hand_of_cards, ("nasi_stun",))
-                if len(nasiens_stance_cancel_id) >= 2:
-                    print("Phase 1: two Nasi stuns — disabling Escalin, Roxy, and up to two stuns for this pick.")
-                    for group in (
-                        self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES),
-                        self._matching_card_ids(hand_of_cards, ROXY_TEMPLATES),
-                    ):
-                        for i in group:
-                            hand_of_cards[i].card_type = CardTypes.DISABLED
-                    for i in nasiens_stance_cancel_id[-2:]:
-                        # Disabling 2 Nasiens cards
-                        hand_of_cards[i].card_type = CardTypes.DISABLED
-                elif nasiens_stance_cancel_id:
-                    print("Disabling Nasiens stance cancel card...")
-                    hand_of_cards[nasiens_stance_cancel_id[-1]].card_type = CardTypes.DISABLED
+        # Disable stance cancel cards even if level 1
+        stance_cancel_ids = self._matching_card_ids(hand_of_cards, ("nasi_stun", "thonar_stance"))
+        for i in stance_cancel_ids:
+            hand_of_cards[i].card_type = CardTypes.DISABLED
+            print("Disabling future stance cancel cards.")
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
@@ -320,6 +307,16 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         # Merge ST gauge cards if possible
         if IBattleStrategy.fight_turn <= 2:
+            # If Lillia in team, let's GROUND Escalin cards to avoid getting ignites
+            if type(self).lillia_in_team:
+                escalin_ids = self._matching_card_ids(
+                    hand_of_cards,
+                    ("escalin_st", "escalin_aoe"),
+                    include_unplayable=True,
+                )
+                for i in escalin_ids:
+                    hand_of_cards[i].card_type = CardTypes.GROUND
+
             drag = self._best_merge_drag_indices(
                 hand_of_cards, ST_GAUGE_TEMPLATES, log_label="gauge merge (insufficient gold)"
             )
