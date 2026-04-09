@@ -106,72 +106,103 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print("Phase 3: activating Escalin talent!")
                 time.sleep(2.5)
 
+        # First, play an attack debuff if we can
+        attack_debuff_ids = [
+            i
+            for i, card in enumerate(hand_of_cards)
+            if card.card_type == CardTypes.ATTACK_DEBUFF and card.card_rank in (CardRanks.SILVER, CardRanks.GOLD)
+        ]
+        played_attack_debuff_ids = [
+            i
+            for i, card in enumerate(picked_cards)
+            if card.card_type == CardTypes.ATTACK_DEBUFF and card.card_rank in (CardRanks.SILVER, CardRanks.GOLD)
+        ]
+        even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
+        if attack_debuff_ids:
+            last_ad = attack_debuff_ids[-1]
+            # Even turns: disable stance cancel. Odd + already played one: ground another. Odd + none played: play one.
+            if even_fight_turn or played_attack_debuff_ids:
+                hand_of_cards[last_ad].card_type = CardTypes.GROUND
+                print("Disabling stance cancel cards.")
+            else:
+                print("Playing an ATTACK_DEBUFF card to remove stance!")
+                return last_ad
+
         # Phase 1: First turn, play a sequence of cards
         if IBattleStrategy.fight_turn == 1:
 
-            stance_already_picked = bool(self._matching_card_ids(picked_cards, ("thonar_stance",)))
-            if not stance_already_picked:
-                print("Playing thonar stance")
-                return self._best_matching_card(hand_of_cards, ("thonar_stance",))
+            if DogsFloor4BattleStrategy.roxy_in_team:
 
-            st_gauge_id = self._best_matching_card(hand_of_cards, ST_GAUGE_TEMPLATES)
-            if type(self).lillia_in_team and st_gauge_id != -1:
-                print("Playing gold ST gauge")
-                return st_gauge_id
+                # stance_already_picked = bool(self._matching_card_ids(picked_cards, ("thonar_stance",)))
+                # if not stance_already_picked:
+                #     print("Playing thonar stance")
+                #     return self._best_matching_card(hand_of_cards, ("thonar_stance",))
 
-            cusack_cleave_id = self._best_matching_card(hand_of_cards, ("cusack_cleave",))
-            if cusack_cleave_id != -1:
-                print("Playing cusack cleave")
-                return cusack_cleave_id
+                cusack_cleave_id = self._best_matching_card(hand_of_cards, ("cusack_cleave",))
+                if cusack_cleave_id != -1:
+                    print("Playing cusack cleave")
+                    return cusack_cleave_id
 
-            lillia_st_already_picked = bool(self._matching_card_ids(picked_cards, ("lillia_st",)))
-            if not lillia_st_already_picked:
-                best_id = self._best_matching_card(hand_of_cards, ("lillia_st",))
-                if best_id != -1:
+                roxy_aoe_already_picked = bool(self._matching_card_ids(picked_cards, ("roxy_aoe",)))
+                if not roxy_aoe_already_picked:
+                    best_id = self._best_matching_card(hand_of_cards, ("roxy_aoe",))
+                    if best_id != -1:
+                        print("Playing roxy aoe")
+                        return best_id
+
+                roxy_st_already_picked = bool(self._matching_card_ids(picked_cards, ("roxy_st",)))
+                if not roxy_st_already_picked:
+                    best_id = self._best_matching_card(hand_of_cards, ("roxy_st",))
+                    if best_id != -1:
+                        print("Playing roxy st")
+                        return best_id
+
+                escalin_aoe_already_picked = bool(self._matching_card_ids(picked_cards, ("escalin_aoe",)))
+                if not escalin_aoe_already_picked and card_turn == 3:
+                    print("Playing escalin aoe")
+                    return self._best_matching_card(hand_of_cards, ("escalin_aoe",))
+
+            elif DogsFloor4BattleStrategy.lillia_in_team:
+                heal_ids = self._matching_card_ids(hand_of_cards, ("nasi_heal",))
+                if len(heal_ids) > 0:
+                    print("Playing nasi heal")
+                    return heal_ids[-1]
+
+                # thonar_stance = self._matching_card_ids(hand_of_cards, ("thonar_stance",))
+                # if len(thonar_stance) > 0:
+                #     print("Playing thonar stance")
+                #     return thonar_stance[-1]
+
+                thonar_gauge_ids = self._matching_card_ids(hand_of_cards, ("thonar_gauge",))
+                if len(thonar_gauge_ids) > 0:
+                    print("Playing thonar gauge")
+                    return thonar_gauge_ids[-1]
+
+                lillia_st_ids = self._matching_card_ids(hand_of_cards, ("lillia_st",))
+                if len(lillia_st_ids) > 0:
                     print("Playing lillia st")
-                    return best_id
+                    return lillia_st_ids[-1]
 
-            roxy_aoe_already_picked = bool(self._matching_card_ids(picked_cards, ("roxy_aoe",)))
-            if not roxy_aoe_already_picked:
-                best_id = self._best_matching_card(hand_of_cards, ("roxy_aoe",))
-                if best_id != -1:
-                    print("Playing roxy aoe")
-                    return best_id
-
-            roxy_st_already_picked = bool(self._matching_card_ids(picked_cards, ("roxy_st",)))
-            if not roxy_st_already_picked:
-                best_id = self._best_matching_card(hand_of_cards, ("roxy_st",))
-                if best_id != -1:
-                    print("Playing roxy st")
-                    return best_id
-
-            escalin_aoe_already_picked = bool(self._matching_card_ids(picked_cards, ("escalin_aoe",)))
-            if not escalin_aoe_already_picked and card_turn == 3:
-                print("Playing escalin aoe")
-                return self._best_matching_card(hand_of_cards, ("escalin_aoe",))
+                print("Desired card not found...")
 
         # fight_turn 1: with two Nasi stuns, burn filler (no Escalin/Roxy/stun); else legacy single-stun tuck.
         if IBattleStrategy.fight_turn == 2:
-            nasiens_stance_cancel_id = self._matching_card_ids(hand_of_cards, ("nasi_stun",))
-            if len(nasiens_stance_cancel_id) >= 2:
-                print("Phase 1: two Nasi stuns — disabling Escalin, Roxy, and up to two stuns for this pick.")
-                for group in (
-                    self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES),
-                    self._matching_card_ids(hand_of_cards, ROXY_TEMPLATES),
-                ):
-                    for i in group:
+            if type(self).roxy_in_team:
+                nasiens_stance_cancel_id = self._matching_card_ids(hand_of_cards, ("nasi_stun",))
+                if len(nasiens_stance_cancel_id) >= 2:
+                    print("Phase 1: two Nasi stuns — disabling Escalin, Roxy, and up to two stuns for this pick.")
+                    for group in (
+                        self._matching_card_ids(hand_of_cards, ESCALIN_TEMPLATES),
+                        self._matching_card_ids(hand_of_cards, ROXY_TEMPLATES),
+                    ):
+                        for i in group:
+                            hand_of_cards[i].card_type = CardTypes.DISABLED
+                    for i in nasiens_stance_cancel_id[-2:]:
+                        # Disabling 2 Nasiens cards
                         hand_of_cards[i].card_type = CardTypes.DISABLED
-                for i in nasiens_stance_cancel_id[-2:]:
-                    # Disabling 2 Nasiens cards
-                    hand_of_cards[i].card_type = CardTypes.DISABLED
-            elif nasiens_stance_cancel_id:
-                print("Disabling Nasiens stance cancel card...")
-                hand_of_cards[nasiens_stance_cancel_id[-1]].card_type = CardTypes.DISABLED
-
-        if IBattleStrategy.fight_turn == 3 and card_turn == 0:
-            nas_open = self._matching_card_ids(hand_of_cards, ("nasi_stun",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
-            if nas_open:
-                return nas_open[-1]
+                elif nasiens_stance_cancel_id:
+                    print("Disabling Nasiens stance cancel card...")
+                    hand_of_cards[nasiens_stance_cancel_id[-1]].card_type = CardTypes.DISABLED
 
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
@@ -183,12 +214,20 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         nasiens_ids = self._matching_card_ids(hand_of_cards, NASI_TEMPLATES)
         has_nasiens_ult = any(self._card_matches_any(hand_of_cards[i], ("nasi_ult",)) for i in nasiens_ids)
 
-        # If we still have no nasi_ult in hand (has_nasiens_ult was false at start of this pick) and we are on
-        # the 3rd+ card of the turn, try to reshuffle: move the first non-GROUND Nasiens card one slot right.
-        if card_turn == 0 and not has_nasiens_ult and len(nasiens_ids) > 0:
-            print("Moving Nasiens card to get ult...")
-            return [nasiens_ids[-1], nasiens_ids[-1] + 1]
+        if card_turn == 0:
+            # If we still have no nasi_ult in hand, try to reshuffle: move the first non-GROUND Nasiens card one slot right.
+            if not has_nasiens_ult and len(nasiens_ids) > 0:
+                print("Moving Nasiens card to get ult...")
+                return [nasiens_ids[-1], nasiens_ids[-1] + 1]
 
+            # On the first pick only, spend one pick merging any available gauge-removal pair.
+            drag = self._best_merge_drag_indices(
+                hand_of_cards, GAUGE_REMOVAL_TEMPLATES, log_label="phase 2 gauge merge"
+            )
+            if drag is not None:
+                return drag
+
+        # Play or disable stance cancel cards if needed
         attack_debuff_ids = [
             i
             for i, card in enumerate(hand_of_cards)
@@ -213,7 +252,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # Do not play Nasiens ult: mark it GROUND so SmarterBattleStrategy skips it (same idea as Escalin above).
         for i in nasiens_ids:
             if self._card_matches_any(hand_of_cards[i], ("nasi_ult",)):
-                print("Disablnig Nasiens ult!")
+                print("Disabling Nasiens ult!")
                 hand_of_cards[i].card_type = CardTypes.GROUND
 
         # Phase 2: Tuck one SILVER/GOLD roxy_st so Smarter skips it (same pattern as _smarter_phase3).
