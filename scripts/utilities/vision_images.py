@@ -270,7 +270,7 @@ cusack_gauge = Vision("dogs\\cusack_gauge.png")
 roxy_in_team = Vision("dogs\\roxy_in_team.png")
 lillia_in_team = Vision("dogs\\lillia_in_team.png")
 dogs_damage_cap = Vision("dogs\\dogs_damage_cap.png")
-# lillia_ult = Vision("dogs\\lillia_ult.png")
+lillia_ult = Vision("dogs\\lillia_ult.png")
 # Dogs whale strat
 freeze_icon = Vision("dogs\\freeze_icon.png")
 lolimerl_aoe = Vision("dogs\\lolimerl_aoe.png")

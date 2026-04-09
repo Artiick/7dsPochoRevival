@@ -83,9 +83,15 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     hand_of_cards[i].card_type = CardTypes.GROUND
 
         else:
-            # Save one Lillia AOE card
-            lillia_aoe_ids = self._matching_card_ids(hand_of_cards, ("lillia_aoe",))
-            if len(lillia_aoe_ids) > 0:
+            # Lillia teams: save the best AOE in phases 1/2, but hide all AOEs in phase 3 until cap-removal logic uses one.
+            lillia_aoe_ids = sorted(
+                [i for i, card in enumerate(hand_of_cards) if self._card_matches_any(card, ("lillia_aoe",))],
+                key=lambda idx: (hand_of_cards[idx].card_rank.value, idx),
+            )
+            if phase == 3:
+                for i in lillia_aoe_ids:
+                    hand_of_cards[i].card_type = CardTypes.GROUND
+            elif len(lillia_aoe_ids) > 0:
                 hand_of_cards[lillia_aoe_ids[-1]].card_type = CardTypes.GROUND
 
         # Phase-specify logic here
@@ -221,9 +227,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 return [nasiens_ids[-1], nasiens_ids[-1] + 1]
 
             # On the first pick only, spend one pick merging any available gauge-removal pair.
-            drag = self._best_merge_drag_indices(
-                hand_of_cards, GAUGE_REMOVAL_TEMPLATES, log_label="phase 2 gauge merge"
-            )
+            drag = self._best_merge_drag_indices(hand_of_cards, ST_GAUGE_TEMPLATES, log_label="phase 2 gauge merge")
             if drag is not None:
                 return drag
 
@@ -285,26 +289,31 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         # Pre-cap Roxy: BRONZE roxy_st merge when hand has no SILVER/GOLD roxy_st.
         # SILVER/GOLD tuck for Smarter is in _smarter_phase3.
-        if (
-            type(self).roxy_in_team
-            and not DogsFloor4BattleStrategy.removed_damage_cap
-            and not DogsFloor4BattleStrategy.taunt_removed
-        ):
-            roxy_st_ids = self._matching_card_ids(hand_of_cards, ("roxy_st",), ranks=(CardRanks.SILVER, CardRanks.GOLD))
-            if len(roxy_st_ids) > 0:
-                DogsFloor4BattleStrategy.taunt_removed = True
-                print("Removing taunt with Roxy!")
-                return roxy_st_ids[-1]
+        if not DogsFloor4BattleStrategy.removed_damage_cap and not DogsFloor4BattleStrategy.taunt_removed:
+            if type(self).roxy_in_team:
+                roxy_st_ids = self._matching_card_ids(
+                    hand_of_cards, ("roxy_st",), ranks=(CardRanks.SILVER, CardRanks.GOLD)
+                )
+                if len(roxy_st_ids) > 0:
+                    DogsFloor4BattleStrategy.taunt_removed = True
+                    print("Removing taunt with Roxy!")
+                    return roxy_st_ids[-1]
 
-            # We haven't removed the taunt and don't have a good Roxy ST saved to remove it...
-            drag = self._best_merge_drag_indices(
-                hand_of_cards,
-                ("roxy_st",),
-                rank=CardRanks.BRONZE,
-                log_label="roxy_st BRONZE merge",
-            )
-            if drag is not None:
-                return drag
+                # We haven't removed the taunt and don't have a good Roxy ST saved to remove it...
+                drag = self._best_merge_drag_indices(
+                    hand_of_cards,
+                    ("roxy_st",),
+                    rank=CardRanks.BRONZE,
+                    log_label="roxy_st BRONZE merge",
+                )
+                if drag is not None:
+                    return drag
+            elif type(self).lillia_in_team:
+                lillia_ult_ids = self._matching_card_ids(hand_of_cards, ("lillia_ult",))
+                if len(lillia_ult_ids) > 0:
+                    DogsFloor4BattleStrategy.taunt_removed = True
+                    print("Removing taunt with Lillia!")
+                    return lillia_ult_ids[-1]
 
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
@@ -314,7 +323,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # Merge ST gauge cards if possible
         if IBattleStrategy.fight_turn <= 2:
             drag = self._best_merge_drag_indices(
-                hand_of_cards, GAUGE_REMOVAL_TEMPLATES, log_label="gauge merge (insufficient gold)"
+                hand_of_cards, ST_GAUGE_TEMPLATES, log_label="gauge merge (insufficient gold)"
             )
             if drag is not None:
                 self._maybe_activate_escalin_before_gauge_merge(hand_of_cards, drag, card_turn=card_turn)
@@ -348,7 +357,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             # Count GOLD ST gauge in hand plus already played this turn (picked_cards).
             if lillia_aoe_ids.size == 0 and (played_st_gauge_ids.size + st_gauge_ids.size) < 2:
                 drag = self._best_merge_drag_indices(
-                    hand_of_cards, GAUGE_REMOVAL_TEMPLATES, log_label="gauge merge (insufficient gold)"
+                    hand_of_cards, ST_GAUGE_TEMPLATES, log_label="gauge merge (insufficient gold)"
                 )
                 if drag is not None:
                     self._maybe_activate_escalin_before_gauge_merge(
@@ -365,7 +374,8 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 return self._smarter_phase3(hand_of_cards, picked_cards)
 
             if (
-                not DogsFloor4BattleStrategy.taunt_removed
+                not type(self).lillia_in_team  # We need Escalin talent to remove taunt with Roxy
+                and not DogsFloor4BattleStrategy.taunt_removed
                 and find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6)
                 and card_turn == 0
             ):
@@ -489,6 +499,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         screenshot=None,
         window_location=None,
     ) -> None:
+        if type(self).lillia_in_team:
+            # If we're using Lillia, let's not remove taunt with Escalin ever!
+            return
+
         if drag is None or card_turn != 0 or DogsFloor4BattleStrategy.taunt_removed:
             return
 
