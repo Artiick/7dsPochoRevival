@@ -32,7 +32,7 @@ class States(Enum):
     FORTUNE_CARD = 7
 
 
-class IFarmerMeta(type):
+class IFarmerMeta(abc.ABCMeta):
     """Metaclass that auto-prints [POT] whenever stamina_pots is incremented."""
 
     @property

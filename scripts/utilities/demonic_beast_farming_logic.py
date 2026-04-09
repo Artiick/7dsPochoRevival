@@ -37,7 +37,7 @@ class States(Enum):
     EXIT_FARMER = 5
 
 
-class DemonicBeastFarmer(IFarmer, abc.ABC):
+class DemonicBeastFarmer(IFarmer):
 
     current_floor = 1
 
