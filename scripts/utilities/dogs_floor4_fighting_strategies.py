@@ -307,16 +307,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         # Merge ST gauge cards if possible
         if IBattleStrategy.fight_turn <= 2:
-            # If Lillia in team, let's GROUND Escalin cards to avoid getting ignites
-            if type(self).lillia_in_team:
-                escalin_ids = self._matching_card_ids(
-                    hand_of_cards,
-                    ("escalin_st", "escalin_aoe"),
-                    include_unplayable=True,
-                )
-                for i in escalin_ids:
-                    hand_of_cards[i].card_type = CardTypes.GROUND
-
             drag = self._best_merge_drag_indices(
                 hand_of_cards, ST_GAUGE_TEMPLATES, log_label="gauge merge (insufficient gold)"
             )
@@ -478,11 +468,12 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         chosen until explicit phase-3 logic plays it.
         """
         roxy_st_hi = (CardRanks.SILVER, CardRanks.GOLD)
+        escalin_hide_type = CardTypes.GROUND if type(self).lillia_in_team else CardTypes.DISABLED
         # Keep Escalin off Smarter's pick list for this delegation.
         for i in range(len(hand_of_cards)):
             if self._card_matches_any(hand_of_cards[i], ("escalin_st", "escalin_aoe")):
                 print("Disabling Escalin cards")
-                hand_of_cards[i].card_type = CardTypes.DISABLED
+                hand_of_cards[i].card_type = escalin_hide_type
             elif self._card_matches_any(hand_of_cards[i], ("escalin_ult",)):
                 print("Disabling Escalin ult")
                 hand_of_cards[i].card_type = CardTypes.GROUND
