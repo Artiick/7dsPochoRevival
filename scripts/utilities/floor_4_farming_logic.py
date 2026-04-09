@@ -102,7 +102,6 @@ class IFloor4Farmer(IFarmer):
             (IFloor4Farmer.success_count / IFloor4Farmer.total_count) * 100 if IFloor4Farmer.total_count > 0 else 0
         )
         print(f"We beat Floor4 {IFloor4Farmer.success_count}/{IFloor4Farmer.total_count} times ({percent:.2f}%).")
-        print(f"Total reset count: {IFloor4Farmer.reset_count}")
         # Log the defeats
         if len(IFloor4Farmer.dict_of_defeats):
             defeat_msg = self._print_defeats()
@@ -262,9 +261,11 @@ class IFloor4Farmer(IFarmer):
                 # Transition to another state or perform clean-up actions
                 IFloor4Farmer.success_count += 1
                 print("FLOOR 4 COMPLETE, WOOO!")
+                print("[CLEAR]")
             else:
                 phase = kwargs.get("phase", None)
                 print(f"The fighter told me they lost{f' on phase {phase}' if phase is not None else ''}... :/")
+                print("[LOSS]")
                 # Increment the defeat count of the corresponding phase
                 if phase is not None:
                     IFloor4Farmer.dict_of_defeats[phase] += 1

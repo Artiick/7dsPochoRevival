@@ -172,12 +172,14 @@ class DemonKingFarmer(IFarmer):
             if victory:
                 DemonKingFarmer.num_clears += 1
                 print(f"Fight complete! Cleared DK {DemonKingFarmer.num_clears} times.")
+                print("[CLEAR]")
                 if DemonKingFarmer.num_clears >= self.max_clears:
                     print("We've cleared the DK enough times, stopping the farming.")
                     self.current_state = States.EXIT_FARMER
                     return
             else:
                 print("We lost :(")
+                print("[LOSS]")
 
             self.current_state = States.GOING_TO_DK
 

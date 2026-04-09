@@ -337,13 +337,15 @@ class IDemonFarmer(IFarmer):
             vio.battle_menu, screenshot, threshold=0.6
         ):
             IDemonFarmer.num_tries += 1
-            if find(vio.victory, screenshot, threshold=0.6):
+            victory = find(vio.victory, screenshot, threshold=0.6)
+            if victory:
                 print("Demon destroyed!")
                 IDemonFarmer.demons_destroyed += 1
                 if IDemonFarmer.current_team_non_fairy:
                     IDemonFarmer.wins_non_fairies += 1
             else:
                 print("Couldn't defeat this demon :(")
+                print("[LOSS]")
 
             # Reset current non-fairy team
             IDemonFarmer.current_team_non_fairy = False
@@ -373,6 +375,8 @@ class IDemonFarmer(IFarmer):
             #     )
 
             print(msg)
+            if victory:
+                print("[CLEAR]")
             print(f"We've missed {IDemonFarmer.missed_invites} invites.")
             print(f"Moving to {self.current_state}.")
 
