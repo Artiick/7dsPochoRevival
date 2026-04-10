@@ -41,7 +41,7 @@ class IFarmerMeta(abc.ABCMeta):
 
     @stamina_pots.setter
     def stamina_pots(cls, value):
-        old = getattr(cls, '_stamina_pots', 0)
+        old = getattr(cls, "_stamina_pots", 0)
         cls._stamina_pots = value
         if value > old:
             print("[POT]")
@@ -290,6 +290,10 @@ class IFarmer(metaclass=IFarmerMeta):
         # We may be receiving the monthly subscription too
         if find(vio.membership_perk, screenshot):
             press_key("esc")
+
+        # In case we're in the knighthood or something!
+        if find_and_click(vio.ok_main_button, screenshot, window_location):
+            return
 
         # Go to CHECK IN state
         if find(vio.knighthood, screenshot) or find(vio.search_for_a_kh, screenshot):
