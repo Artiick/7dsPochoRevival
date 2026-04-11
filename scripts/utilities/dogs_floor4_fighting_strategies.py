@@ -452,7 +452,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     "roxy_ult",
                     "thonar_ult",
                 ),
-                ("lillia_aoe"),
+                ("lillia_aoe",),
             ):
                 if ids := self._matching_card_ids(hand_of_cards, templates):
                     return ids[-1]
