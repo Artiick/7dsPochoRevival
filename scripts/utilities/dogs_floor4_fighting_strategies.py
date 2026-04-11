@@ -445,8 +445,14 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 ("escalin_ult",),
                 ("escalin_aoe",),
                 ("escalin_st",),
-                ("roxy_st", "roxy_ult"),
                 ("roxy_aoe",),
+                ("roxy_st",),
+                (
+                    "lillia_ult",
+                    "roxy_ult",
+                    "thonar_ult",
+                ),
+                ("lillia_aoe"),
             ):
                 if ids := self._matching_card_ids(hand_of_cards, templates):
                     return ids[-1]
@@ -456,6 +462,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 for i, card in enumerate(hand_of_cards)
                 if card.card_type == CardTypes.ULTIMATE and not find(vio.nasi_ult, card.card_image)
             ]
+
             for i in reversed(ult_ids):
                 return i
 
