@@ -451,6 +451,14 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 if ids := self._matching_card_ids(hand_of_cards, templates):
                     return ids[-1]
 
+            ult_ids = [
+                i
+                for i, card in enumerate(hand_of_cards)
+                if card.card_type == CardTypes.ULTIMATE and not find(vio.nasi_ult, card.card_image)
+            ]
+            for i in reversed(ult_ids):
+                return i
+
         return self._smarter_phase3(hand_of_cards, picked_cards)
 
     def _smarter_phase3(self, hand_of_cards: list[Card], picked_cards: list[Card]) -> int:
