@@ -279,7 +279,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         # Pre-cap: play Nasiens ult before the gauge-removal turns.
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
-        if nasiens_ult_id and not DogsFloor4BattleStrategy.removed_damage_cap:
+        if nasiens_ult_id and IBattleStrategy.fight_turn <= 2:
             return nasiens_ult_id[-1]
 
         # Early turns: prioritize gauge merges, otherwise delegate to Smarter immediately.
@@ -403,6 +403,9 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
             # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
             if IBattleStrategy.fight_turn < DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn:
+
+                if nasiens_ult_id := self._matching_card_ids(hand_of_cards, ("nasi_ult",)):
+                    return nasiens_ult_id[-1]
 
                 if escalin_ult_ids := self._matching_card_ids(hand_of_cards, ("escalin_ult",)):
                     return escalin_ult_ids[-1]
