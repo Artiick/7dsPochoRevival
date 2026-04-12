@@ -109,7 +109,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         # Let's start with Escalin's talent only on turn 2-onwards
         if IBattleStrategy.fight_turn > 1:
             screenshot, window_location = capture_window()
-            if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+            if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.7):
                 print("Phase 1: activating Escalin talent!")
                 time.sleep(2.5)
 
@@ -355,7 +355,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             if (
                 not type(self).lillia_in_team  # We need Escalin talent to remove taunt with Roxy
                 and not DogsFloor4BattleStrategy.taunt_removed
-                and find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6)
+                and find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.7)
                 and card_turn == 0
             ):
                 print("Phase 3: activating Escalin talent!")
@@ -528,7 +528,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
         if screenshot is None or window_location is None:
             screenshot, window_location = capture_window()
-        if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+        if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.7):
             print("Phase 3: activating Escalin talent before gauge merge!")
             DogsFloor4BattleStrategy.taunt_removed = True
             time.sleep(2.5)
