@@ -110,7 +110,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         if IBattleStrategy.fight_turn > 1:
             screenshot, window_location = capture_window()
             if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
-                print("Phase 3: activating Escalin talent!")
+                print("Phase 1: activating Escalin talent!")
                 time.sleep(2.5)
 
         # First, play one stance-control card on odd turns; otherwise hide them from Smarter.
@@ -131,12 +131,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
         if IBattleStrategy.fight_turn == 1:
 
             if DogsFloor4BattleStrategy.roxy_in_team:
-
-                # stance_already_picked = bool(self._matching_card_ids(picked_cards, ("thonar_stance",)))
-                # if not stance_already_picked:
-                #     print("Playing thonar stance")
-                #     return self._best_matching_card(hand_of_cards, ("thonar_stance",))
-
                 cusack_cleave_id = self._best_matching_card(hand_of_cards, ("cusack_cleave",))
                 if cusack_cleave_id != -1:
                     print("Playing cusack cleave")
@@ -162,23 +156,15 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     return self._best_matching_card(hand_of_cards, ("escalin_aoe",))
 
             elif DogsFloor4BattleStrategy.lillia_in_team:
-                heal_ids = self._matching_card_ids(hand_of_cards, ("nasi_heal",))
-                if len(heal_ids) > 0:
+                if heal_ids := self._matching_card_ids(hand_of_cards, ("nasi_heal",)):
                     print("Playing nasi heal")
                     return heal_ids[-1]
 
-                # thonar_stance = self._matching_card_ids(hand_of_cards, ("thonar_stance",))
-                # if len(thonar_stance) > 0:
-                #     print("Playing thonar stance")
-                #     return thonar_stance[-1]
-
-                thonar_gauge_ids = self._matching_card_ids(hand_of_cards, ("thonar_gauge",))
-                if len(thonar_gauge_ids) > 0:
+                if thonar_gauge_ids := self._matching_card_ids(hand_of_cards, ("thonar_gauge",)):
                     print("Playing thonar gauge")
                     return thonar_gauge_ids[-1]
 
-                lillia_st_ids = self._matching_card_ids(hand_of_cards, ("lillia_st",))
-                if len(lillia_st_ids) > 0:
+                if lillia_st_ids := self._matching_card_ids(hand_of_cards, ("lillia_st",)):
                     print("Playing lillia st")
                     return lillia_st_ids[-1]
 
@@ -202,7 +188,7 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             has_nasiens_ult = any(self._card_matches_any(hand_of_cards[i], ("nasi_ult",)) for i in nasiens_ids)
 
             # If we still have no nasi_ult in hand, try to reshuffle: move the first non-GROUND Nasiens card one slot right.
-            if not has_nasiens_ult and len(nasiens_ids) > 0:
+            if not has_nasiens_ult and nasiens_ids:
                 print("Moving Nasiens card to get ult...")
                 return [nasiens_ids[-1], nasiens_ids[-1] + 1]
 
@@ -212,13 +198,11 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 return drag
 
         # Play one stance-control card on odd turns; otherwise hide them from Smarter.
-        attack_debuff_ids = self._matching_card_ids(hand_of_cards, STANCE_CONTROL_TEMPLATES)
-        played_attack_debuff_ids = self._matching_card_ids(picked_cards, STANCE_CONTROL_TEMPLATES)
-        if attack_debuff_ids:
+        if attack_debuff_ids := self._matching_card_ids(hand_of_cards, STANCE_CONTROL_TEMPLATES):
+            played_attack_debuff_ids = self._matching_card_ids(picked_cards, STANCE_CONTROL_TEMPLATES)
             last_ad = attack_debuff_ids[-1]
-            even_fight_turn = IBattleStrategy.fight_turn % 2 == 0
             # Even turns: disable stance cancel. Odd + already played one: ground another. Odd + none played: play one.
-            if even_fight_turn or played_attack_debuff_ids:
+            if IBattleStrategy.fight_turn % 2 == 0 or played_attack_debuff_ids:
                 hand_of_cards[last_ad].card_type = CardTypes.GROUND
                 print("Disabling stance cancel cards.")
             else:
@@ -262,38 +246,43 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
             print("Dog is putting up a taunt...")
             DogsFloor4BattleStrategy.taunt_removed = False
 
-        # Let's set to GROUND all ST gauge cards
+        # Reserve ST gauge cards unless phase-3 logic explicitly plays them.
         st_gauge_ids = [i for i, card in enumerate(hand_of_cards) if self._card_matches_any(card, ST_GAUGE_TEMPLATES)]
         for i in st_gauge_ids:
             hand_of_cards[i].card_type = CardTypes.GROUND
 
         # Pre-cap Roxy: BRONZE roxy_st merge when hand has no SILVER/GOLD roxy_st.
         # SILVER/GOLD tuck for Smarter is in _smarter_phase3.
-        if not DogsFloor4BattleStrategy.removed_damage_cap and not DogsFloor4BattleStrategy.taunt_removed:
-            if type(self).roxy_in_team:
-                roxy_st_ids = self._matching_card_ids(
-                    hand_of_cards, ("roxy_st",), ranks=(CardRanks.SILVER, CardRanks.GOLD)
-                )
-                if len(roxy_st_ids) > 0:
-                    DogsFloor4BattleStrategy.taunt_removed = True
-                    print("Removing taunt with Roxy!")
-                    return roxy_st_ids[-1]
+        if (
+            not DogsFloor4BattleStrategy.removed_damage_cap
+            and not DogsFloor4BattleStrategy.taunt_removed
+            and type(self).roxy_in_team
+        ):
+            if roxy_st_ids := self._matching_card_ids(
+                hand_of_cards,
+                ("roxy_st",),
+                ranks=(CardRanks.SILVER, CardRanks.GOLD),
+            ):
+                DogsFloor4BattleStrategy.taunt_removed = True
+                print("Removing taunt with Roxy!")
+                return roxy_st_ids[-1]
 
-                # We haven't removed the taunt and don't have a good Roxy ST saved to remove it...
-                drag = self._best_merge_drag_indices(
-                    hand_of_cards,
-                    ("roxy_st",),
-                    rank=CardRanks.BRONZE,
-                    log_label="roxy_st BRONZE merge",
-                )
-                if drag is not None:
-                    return drag
-        # First, play Nasiens ultimate if we have it
+            # We haven't removed the taunt and don't have a good Roxy ST saved to remove it...
+            drag = self._best_merge_drag_indices(
+                hand_of_cards,
+                ("roxy_st",),
+                rank=CardRanks.BRONZE,
+                log_label="roxy_st BRONZE merge",
+            )
+            if drag is not None:
+                return drag
+
+        # Pre-cap: play Nasiens ult before the gauge-removal turns.
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
-        if len(nasiens_ult_id) > 0 and not DogsFloor4BattleStrategy.removed_damage_cap:
+        if nasiens_ult_id and not DogsFloor4BattleStrategy.removed_damage_cap:
             return nasiens_ult_id[-1]
 
-        # Merge ST gauge cards if possible
+        # Early turns: prioritize gauge merges, otherwise delegate to Smarter immediately.
         if IBattleStrategy.fight_turn <= 2:
             drag = self._best_merge_drag_indices(
                 hand_of_cards, ST_GAUGE_TEMPLATES, log_label="gauge merge (insufficient gold)"
@@ -304,13 +293,10 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
 
             return self._smarter_phase3(hand_of_cards, picked_cards)
 
-        # At this point, let's see if we can remove the damage cap thingy...
-        screenshot, window_location = capture_window()
-        # Safety net:
+        # Mid/late phase 3: either remove the damage cap or go HAM after it is gone.
         has_damage_cap = not DogsFloor4BattleStrategy.removed_damage_cap
-        # DogsFloor4BattleStrategy.removed_damage_cap = not has_damage_cap
-        print("Do we still have a damage cap?", has_damage_cap, " Do we see it?", find(vio.dogs_damage_cap, screenshot))
         if has_damage_cap:
+            screenshot, window_location = capture_window()
             # First, check if we've played enough
             played_st_gauge_ids = self._matching_card_ids(
                 picked_cards,
@@ -410,20 +396,15 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                     return st_gauge_pick_id
 
         else:
-
-            # NOTE: Let's *not* play Escalin talent here, it may remove Nasiens buffs!
-
-            # Re-enable Lillia / ST gauge cards, we can/should play them here -- Maybe not needed, but just in case
-            for i in range(len(hand_of_cards)):
-                if self._card_matches_any(hand_of_cards[i], GAUGE_REMOVAL_TEMPLATES):
+            # Do not use Escalin talent here; it may remove Nasiens buffs.
+            for i, card in enumerate(hand_of_cards):
+                if self._card_matches_any(card, GAUGE_REMOVAL_TEMPLATES):
                     hand_of_cards[i].card_type = CardTypes.ATTACK
 
             # Damage cap not visible: go HAM — play Escalin and Roxy's cards like crazy
             if IBattleStrategy.fight_turn < DogsFloor4BattleStrategy._defer_ham_cards_until_after_fight_turn:
 
-                # But, we can play Escalin ult if we have it
-                escalin_ult_ids = self._matching_card_ids(hand_of_cards, ("escalin_ult",))
-                if len(escalin_ult_ids) > 0:
+                if escalin_ult_ids := self._matching_card_ids(hand_of_cards, ("escalin_ult",)):
                     return escalin_ult_ids[-1]
 
                 print(
