@@ -431,14 +431,26 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 if ids := self._matching_card_ids(hand_of_cards, templates):
                     return ids[-1]
 
-            ult_ids = [
+            if ult_ids := [
                 i
                 for i, card in enumerate(hand_of_cards)
                 if card.card_type == CardTypes.ULTIMATE and not find(vio.nasi_ult, card.card_image)
-            ]
+            ]:
+                return ult_ids[-1]
 
-            for i in reversed(ult_ids):
-                return i
+            if att_deb_ids := sorted(
+                [
+                    i
+                    for i, card in enumerate(hand_of_cards)
+                    if card.card_type in {CardTypes.ATTACK, CardTypes.ATTACK_DEBUFF}
+                ],
+                key=lambda idx: (
+                    hand_of_cards[idx].card_rank.value,
+                    hand_of_cards[idx].card_type != CardTypes.ATTACK,
+                    idx,
+                ),
+            ):
+                return att_deb_ids[-1]
 
         return self._smarter_phase3(hand_of_cards, picked_cards)
 
