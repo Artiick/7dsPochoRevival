@@ -288,13 +288,6 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 )
                 if drag is not None:
                     return drag
-            elif type(self).lillia_in_team:
-                lillia_ult_ids = self._matching_card_ids(hand_of_cards, ("lillia_ult",))
-                if len(lillia_ult_ids) > 0:
-                    DogsFloor4BattleStrategy.taunt_removed = True
-                    print("Removing taunt with Lillia!")
-                    return lillia_ult_ids[-1]
-
         # First, play Nasiens ultimate if we have it
         nasiens_ult_id = self._matching_card_ids(hand_of_cards, ("nasi_ult",))
         if len(nasiens_ult_id) > 0 and not DogsFloor4BattleStrategy.removed_damage_cap:
