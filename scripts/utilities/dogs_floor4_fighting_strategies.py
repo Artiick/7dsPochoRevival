@@ -192,10 +192,11 @@ class DogsFloor4BattleStrategy(IBattleStrategy):
                 print("Moving Nasiens card to get ult...")
                 return [nasiens_ids[-1], nasiens_ids[-1] + 1]
 
-            # On the first pick only, spend one pick merging any available gauge-removal pair.
-            drag = self._best_merge_drag_indices(hand_of_cards, ST_GAUGE_TEMPLATES, log_label="phase 2 gauge merge")
-            if drag is not None:
-                return drag
+            if not type(self).lillia_in_team:
+                # On the first pick only, spend one pick merging any available gauge-removal pair.
+                drag = self._best_merge_drag_indices(hand_of_cards, ST_GAUGE_TEMPLATES, log_label="phase 2 gauge merge")
+                if drag is not None:
+                    return drag
 
         # Play one stance-control card on odd turns; otherwise hide them from Smarter.
         if attack_debuff_ids := self._matching_card_ids(hand_of_cards, STANCE_CONTROL_TEMPLATES):
