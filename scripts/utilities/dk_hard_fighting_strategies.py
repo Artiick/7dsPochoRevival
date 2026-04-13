@@ -7,8 +7,8 @@ from utilities.pattern_match_strategies import TemplateMatchingStrategy
 from utilities.utilities import capture_window, count_needle_image, crop_region, find
 
 
-class DemonKingBattleStrategy(IBattleStrategy):
-    """Demon King battle strategy"""
+class DemonKingHardBattleStrategy(IBattleStrategy):
+    """Demon King hard-difficulty battle strategy"""
 
     def get_next_card_index(
         self,

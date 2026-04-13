@@ -8,6 +8,7 @@ import pyautogui as pyautogui
 import utilities.vision_images as vio
 from utilities.card_data import CardColors
 from utilities.coordinates import Coordinates
+from utilities.dk_hard_fighting_strategies import DemonKingHardBattleStrategy
 from utilities.dk_fighter import DemonKingFighter
 from utilities.general_farmer_interface import CHECK_IN_HOUR, IFarmer
 from utilities.general_farmer_interface import States as GlobalStates
@@ -61,6 +62,7 @@ class DemonKingFarmer(IFarmer):
         self.current_state = starting_state
 
         DemonKingFarmer.dk_difficulty = dk_difficulty
+        dk_strategy = self._resolve_dk_strategy()
 
         self.max_clears = float(num_clears)
         if self.max_clears < float("inf"):
@@ -69,10 +71,46 @@ class DemonKingFarmer(IFarmer):
         # Using composition to decouple the main farmer logic from the actual fight.
         # Pass in the callback to call after the fight is complete
         self.fighter: IFighter = DemonKingFighter(
-            battle_strategy=battle_strategy,
+            battle_strategy=dk_strategy,
             callback=self.fight_complete_callback,
         )
         self.dk_fighting_thread: threading.Thread = None
+
+    def _resolve_dk_strategy(self) -> type[IBattleStrategy]:
+        """Resolve the configured Demon King strategy, falling back to hard when unavailable."""
+        if DemonKingFarmer.dk_difficulty == "hard":
+            return DemonKingHardBattleStrategy
+
+        if DemonKingFarmer.dk_difficulty == "extreme":
+            try:
+                from utilities.dk_extreme_fighting_strategies import (
+                    DemonKingExtremeBattleStrategy,
+                )
+
+                return DemonKingExtremeBattleStrategy
+            except Exception as exc:
+                return self._fallback_to_hard_difficulty("Extreme", exc)
+
+        if DemonKingFarmer.dk_difficulty == "hell":
+            try:
+                from utilities.dk_hell_fighting_strategies import (
+                    DemonKingHellBattleStrategy,
+                )
+
+                return DemonKingHellBattleStrategy
+            except Exception as exc:
+                return self._fallback_to_hard_difficulty("Hell", exc)
+
+        raise RuntimeError(f"Unknown Demon King difficulty: {DemonKingFarmer.dk_difficulty}")
+
+    def _fallback_to_hard_difficulty(self, requested_difficulty: str, exc: Exception) -> type[IBattleStrategy]:
+        """Use the hard strategy and hard in-game difficulty when a requested strategy is unavailable."""
+        print(
+            f"[WARN] {requested_difficulty} DK strategy unavailable ({exc}). "
+            "Falling back to hard difficulty and hard strategy."
+        )
+        DemonKingFarmer.dk_difficulty = "hard"
+        return DemonKingHardBattleStrategy
 
     def _click_difficulty(self, screenshot: np.ndarray, window_location: tuple):
         """Click on the desired difficulty"""

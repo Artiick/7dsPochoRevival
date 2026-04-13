@@ -400,7 +400,7 @@ Tune your gear so you can guarantee that.<br>
 <p><strong>Requirements:</strong><br>
 • Team A: Skuld (att/crit), any 3 boosters<br>
 • Team B: Anything, won't be used</p>
-<p><em>Note: Only Hard mode is enabled — it offers the best rewards per coin.</em></p>
+<p><em>Note: Hard, Extreme, and Hell are selectable. If an Extreme/Hell strategy is unavailable, the bot falls back to Hard difficulty and the Hard strategy.</em></p>
     """,
     "Reroll Constellation": """
 <p><strong>Requirements:</strong><br>
@@ -561,7 +561,7 @@ FARMERS = [
                 "name": "--dk-diff",
                 "label": "Difficulty",
                 "type": "dropdown",
-                "choices": ["hard"],
+                "choices": ["hard", "extreme", "hell"],
                 "default": "hard",
             },
             {"name": "--num-clears", "label": "Num clears", "type": "text", "default": "10"},
