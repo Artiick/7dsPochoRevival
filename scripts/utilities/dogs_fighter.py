@@ -198,16 +198,7 @@ class DogsFighter(IFighter):
 
     def exit_fight_state(self):
         """Manually finish the fight when the hand is fully disabled (same flow as BirdFighter)."""
-        screenshot, window_location = capture_window()
-
-        if find(vio.ok_main_button, screenshot):
-            self.current_state = FightingStates.DEFEAT
-            return
-
-        if find_and_click(vio.forfeit, screenshot, window_location):
-            return
-
-        find_and_click(vio.pause, screenshot, window_location)
+        self._run_manual_forfeit_flow()
 
     @IFighter.run_wrapper
     def run(self, floor=1):

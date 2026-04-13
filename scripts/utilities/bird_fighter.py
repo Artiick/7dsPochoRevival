@@ -99,20 +99,8 @@ class BirdFighter(IFighter):
         return 4 if find(vio.skill_locked, screenshot, threshold=0.6) else rectangles.shape[0] + rectangles_2.shape[0]
 
     def exit_fight_state(self):
-        """We have to manually finish the fight because we've been fully disabled..."""
-        screenshot, window_location = capture_window()
-
-        if find(vio.ok_main_button, screenshot):
-            # Move to the fight complete state
-            self.current_state = FightingStates.DEFEAT
-            return
-
-        # Click on FORFEIT BATTLE
-        if find_and_click(vio.forfeit, screenshot, window_location):
-            return
-
-        # Click in the 'pause' icon
-        find_and_click(vio.pause, screenshot, window_location)
+        """We have to manually finish the fight because we've been fully disabled."""
+        self._run_manual_forfeit_flow()
 
     def defeat_state(self):  # sourcery skip: class-extract-method
         """We've lost the battle..."""

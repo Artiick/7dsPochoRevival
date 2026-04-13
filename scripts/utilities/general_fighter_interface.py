@@ -8,6 +8,7 @@ from numbers import Integral
 from typing import Callable
 
 import numpy as np
+import utilities.vision_images as vio
 from utilities.card_data import Card
 from utilities.fighting_strategies import IBattleStrategy
 from utilities.logging_utils import LoggerWrapper
@@ -17,6 +18,8 @@ from utilities.utilities import (
     click_im,
     display_image,
     drag_im,
+    find,
+    find_and_click,
     get_click_point_from_rectangle,
     get_hand_cards,
     is_ground_region,
@@ -71,6 +74,19 @@ class IFighter(abc.ABC):
         with self._lock:
             print("Manually stopping the fighter thread.")
             self.exit_thread = True
+
+    def _run_manual_forfeit_flow(self) -> None:
+        """Standard pause/forfeit flow shared by beast fighters."""
+        screenshot, window_location = capture_window()
+
+        if find(vio.ok_main_button, screenshot):
+            self.current_state = FightingStates.DEFEAT
+            return
+
+        if find_and_click(vio.forfeit, screenshot, window_location):
+            return
+
+        find_and_click(vio.pause, screenshot, window_location)
 
     def _before_pick_cards(self, *, screenshot, window_location, empty_card_slots: int) -> None:
         """Hook for subclasses to react to the slot-count observation before card selection.

@@ -74,7 +74,50 @@ class DogsFloor4Fighter(DogsFighter):
     def my_turn_state(self):
         self._identify_current_phase()
         self._maybe_increment_fight_turn_at_turn_start()
+        if self._should_exit_before_play_cards():
+            return
         self.play_cards()
+
+    def play_cards(self, **kwargs):
+        """Re-check the turn-limit cutoff after the late slot-detection fallback.
+
+        Floor 4 can discover a normal 3+/4-slot opening only inside ``play_cards``.
+        When that path bumps ``fight_turn`` to 10, we must still forfeit before the
+        first card pick rather than letting one card slip through.
+        """
+        screenshot, window_location = capture_window()
+        empty_card_slots = self.count_empty_card_slots(screenshot)
+
+        self._before_pick_cards(
+            screenshot=screenshot, window_location=window_location, empty_card_slots=empty_card_slots
+        )
+
+        if empty_card_slots > self.available_card_slots:
+            self.available_card_slots = empty_card_slots
+
+        if self._should_exit_before_play_cards():
+            return
+
+        return super().play_cards(**kwargs)
+
+    def _should_exit_before_play_cards(self) -> bool:
+        is_turn_start = self.picked_cards[0].card_image is None
+        fight_turn = self.battle_strategy.fight_turn
+        print(
+            "Phase 3 turn-limit evaluation:",
+            f"phase={IFighter.current_phase}",
+            f"fight_turn={fight_turn}",
+            f"is_turn_start={is_turn_start}",
+        )
+        if IFighter.current_phase != 3 or not is_turn_start or fight_turn < 10:
+            return False
+
+        print(
+            "Phase 3 reached the turn limit; manually forfeiting before playing cards.",
+            f"fight_turn={fight_turn}",
+        )
+        self.current_state = FightingStates.EXIT_FIGHT
+        return True
 
     def _before_pick_cards(self, *, screenshot, window_location, empty_card_slots: int) -> None:
         """Floor 4 fallback: count a normal turn if slot detection stabilizes late inside ``play_cards``.
