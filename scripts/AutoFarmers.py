@@ -1052,8 +1052,11 @@ class AboutTab(QWidget):
         self.updating = False
         self.repo_root = os.path.dirname(os.path.dirname(__file__))
         self.gui_file_path = os.path.abspath(__file__)
+        self.requirements_file_path = os.path.join(self.repo_root, "requirements.txt")
         self._restart_safe_supplier = restart_safe_supplier or (lambda: True)
         self._pre_update_gui_hash = None
+        self._pre_update_requirements_hash = None
+        self._pending_gui_changed = False
         self.init_ui()
 
     def init_ui(self):
@@ -1233,7 +1236,7 @@ class AboutTab(QWidget):
         self.status_label.setText("🔄 Running 'git stash'...")
 
         # Start with git stash
-        self.run_git_command(["stash"], self.after_stash)
+        self.run_process("git", ["stash"], self.after_stash)
 
     def open_url(self, url: str):
         """Open URL in default browser"""
@@ -1259,9 +1262,10 @@ class AboutTab(QWidget):
             return
 
         # Stash successful, now run git pull
-        self._pre_update_gui_hash = self._compute_gui_file_hash()
+        self._pre_update_gui_hash = self._compute_file_hash(self.gui_file_path)
+        self._pre_update_requirements_hash = self._compute_file_hash(self.requirements_file_path)
         self.status_label.setText("🔄 Running 'git pull'...")
-        self.run_git_command(["pull"], self.after_pull)
+        self.run_process("git", ["pull"], self.after_pull)
 
     def after_pull(self, exit_code):
         """Handle completion of git pull command"""
@@ -1272,8 +1276,19 @@ class AboutTab(QWidget):
 
         self._handle_post_pull_completion()
 
-    def run_git_command(self, args, on_finished):
-        """Run a git command in the repo root directory"""
+    def after_requirements_install(self, exit_code):
+        """Handle completion of the requirements install step."""
+        if exit_code != 0:
+            self.status_label.setText(
+                "❌ Requirements install failed; please run python -m pip install -r requirements.txt"
+            )
+            self._finish_update(clear_status=False)
+            return
+
+        self._complete_restart_decision()
+
+    def run_process(self, program, args, on_finished):
+        """Run an external command in the repo root directory."""
         if self.update_process is not None:
             return  # Already running a command
 
@@ -1287,11 +1302,11 @@ class AboutTab(QWidget):
         )
         self.update_process.readyReadStandardOutput.connect(self.on_git_output)
 
-        # Start the git command
-        self.update_process.start("git", args)
+        # Start the command
+        self.update_process.start(program, args)
 
         if not self.update_process.waitForStarted(3000):
-            self.status_label.setText("❌ Failed to start git command")
+            self.status_label.setText(f"❌ Failed to start {program}")
             self.update_process = None
             self._finish_update()
 
@@ -1307,27 +1322,46 @@ class AboutTab(QWidget):
         self.update_process = None
         callback(exit_code)
 
-    def _compute_gui_file_hash(self):
-        """Return the current GUI file hash, or None if it can't be read."""
+    def _compute_file_hash(self, path):
+        """Return a file hash, or None if the file can't be read."""
         try:
             hasher = hashlib.sha256()
-            with open(self.gui_file_path, "rb") as gui_file:
-                for chunk in iter(lambda: gui_file.read(8192), b""):
+            with open(path, "rb") as file_obj:
+                for chunk in iter(lambda: file_obj.read(8192), b""):
                     hasher.update(chunk)
             return hasher.hexdigest()
         except OSError:
             return None
 
     def _handle_post_pull_completion(self):
-        """Decide whether a successful update should trigger a GUI restart."""
-        post_update_hash = self._compute_gui_file_hash()
-        gui_changed = (
+        """Handle post-pull decisions, including requirements install and restart."""
+        post_update_gui_hash = self._compute_file_hash(self.gui_file_path)
+        post_update_requirements_hash = self._compute_file_hash(self.requirements_file_path)
+        self._pending_gui_changed = (
             self._pre_update_gui_hash is not None
-            and post_update_hash is not None
-            and self._pre_update_gui_hash != post_update_hash
+            and post_update_gui_hash is not None
+            and self._pre_update_gui_hash != post_update_gui_hash
+        )
+        requirements_changed = (
+            self._pre_update_requirements_hash is not None
+            and post_update_requirements_hash is not None
+            and self._pre_update_requirements_hash != post_update_requirements_hash
         )
 
-        if not gui_changed:
+        if requirements_changed:
+            self.status_label.setText("🔄 Installing updated requirements...")
+            self.run_process(
+                sys.executable,
+                ["-m", "pip", "install", "-r", self.requirements_file_path],
+                self.after_requirements_install,
+            )
+            return
+
+        self._complete_restart_decision()
+
+    def _complete_restart_decision(self):
+        """Decide whether the update should trigger a GUI restart."""
+        if not self._pending_gui_changed:
             self.status_label.setText("✅ Update complete")
             self._finish_update()
             return
@@ -1353,6 +1387,8 @@ class AboutTab(QWidget):
         self.updating = False
         self.update_btn.setEnabled(True)
         self._pre_update_gui_hash = None
+        self._pre_update_requirements_hash = None
+        self._pending_gui_changed = False
         if clear_status:
             QTimer.singleShot(5000, lambda: self.status_label.setText(""))
 
