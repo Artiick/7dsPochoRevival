@@ -16,6 +16,7 @@
 # Dropdown + stacked pages for all farmer scripts, with argument fields, terminal output, and process control.
 
 import datetime
+import hashlib
 import os
 import re
 import sys
@@ -1045,11 +1046,14 @@ PASSWORD_CLI_SCRIPTS = frozenset(
 
 
 class AboutTab(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, restart_safe_supplier=None, parent=None):
         super().__init__(parent)
         self.update_process = None
         self.updating = False
         self.repo_root = os.path.dirname(os.path.dirname(__file__))
+        self.gui_file_path = os.path.abspath(__file__)
+        self._restart_safe_supplier = restart_safe_supplier or (lambda: True)
+        self._pre_update_gui_hash = None
         self.init_ui()
 
     def init_ui(self):
@@ -1251,27 +1255,22 @@ class AboutTab(QWidget):
         """Handle completion of git stash command"""
         if exit_code != 0:
             self.status_label.setText("❌ git stash failed")
-            self.updating = False
-            self.update_btn.setEnabled(True)
+            self._finish_update()
             return
 
         # Stash successful, now run git pull
+        self._pre_update_gui_hash = self._compute_gui_file_hash()
         self.status_label.setText("🔄 Running 'git pull'...")
         self.run_git_command(["pull"], self.after_pull)
 
     def after_pull(self, exit_code):
         """Handle completion of git pull command"""
-        if exit_code == 0:
-            self.status_label.setText("✅ Update complete!")
-        else:
+        if exit_code != 0:
             self.status_label.setText("❌ git pull failed")
+            self._finish_update()
+            return
 
-        # Re-enable button and reset state
-        self.updating = False
-        self.update_btn.setEnabled(True)
-
-        # Clear status after 5 seconds
-        QTimer.singleShot(5000, lambda: self.status_label.setText(""))
+        self._handle_post_pull_completion()
 
     def run_git_command(self, args, on_finished):
         """Run a git command in the repo root directory"""
@@ -1294,8 +1293,7 @@ class AboutTab(QWidget):
         if not self.update_process.waitForStarted(3000):
             self.status_label.setText("❌ Failed to start git command")
             self.update_process = None
-            self.updating = False
-            self.update_btn.setEnabled(True)
+            self._finish_update()
 
     def on_git_output(self):
         """Handle git command output (optional - could be used for detailed logging)"""
@@ -1308,6 +1306,55 @@ class AboutTab(QWidget):
         """Handle git command completion"""
         self.update_process = None
         callback(exit_code)
+
+    def _compute_gui_file_hash(self):
+        """Return the current GUI file hash, or None if it can't be read."""
+        try:
+            hasher = hashlib.sha256()
+            with open(self.gui_file_path, "rb") as gui_file:
+                for chunk in iter(lambda: gui_file.read(8192), b""):
+                    hasher.update(chunk)
+            return hasher.hexdigest()
+        except OSError:
+            return None
+
+    def _handle_post_pull_completion(self):
+        """Decide whether a successful update should trigger a GUI restart."""
+        post_update_hash = self._compute_gui_file_hash()
+        gui_changed = (
+            self._pre_update_gui_hash is not None
+            and post_update_hash is not None
+            and self._pre_update_gui_hash != post_update_hash
+        )
+
+        if not gui_changed:
+            self.status_label.setText("✅ Update complete")
+            self._finish_update()
+            return
+
+        if not self._restart_safe_supplier():
+            self.status_label.setText(
+                "✅ Update complete - restart required because AutoFarmers.py changed"
+            )
+            self._finish_update(clear_status=False)
+            return
+
+        self.status_label.setText("✅ Update complete - restarting GUI...")
+        self._finish_update(clear_status=False)
+        if not _restart_application():
+            self.status_label.setText(
+                "✅ Update complete - GUI restart failed; please reopen manually"
+            )
+            return
+        QApplication.instance().quit()
+
+    def _finish_update(self, clear_status=True):
+        """Reset update UI state and optionally clear the status after a delay."""
+        self.updating = False
+        self.update_btn.setEnabled(True)
+        self._pre_update_gui_hash = None
+        if clear_status:
+            QTimer.singleShot(5000, lambda: self.status_label.setText(""))
 
 
 class SettingsTab(QWidget):
@@ -2457,8 +2504,8 @@ class MainWindow(QMainWindow):
         self._detail_views: dict = {}
         self._farmer_by_name = {f["name"]: f for f in FARMERS}
 
-        self.about_tab = AboutTab()
         self.settings_tab = SettingsTab()
+        self.about_tab = AboutTab(restart_safe_supplier=lambda: not self._any_farmer_running())
         self._controllers = {
             farmer["name"]: FarmerController(
                 farmer,

@@ -176,13 +176,15 @@ class GroundCardPredictor(IModel):
     def is_ground_card(card: np.ndarray) -> bool:
         """Predict ground card"""
 
-        # Ensure models are properly loaded
-        GroundCardPredictor._load_feature_transform_model("scaler_ground_cards_model.scaler")
-        GroundCardPredictor._load_model("ground_cards_predictor.lr")
-
         # Extract the features
         features = extract_color_histograms_features(card, bins=(8, 8, 8))
-        features_scaled = GroundCardPredictor.feature_transform_model.transform(features)
 
-        # Predict if the card is ground
-        return int(GroundCardPredictor.model.predict(features_scaled).item())
+        ## Current behavior: raw histogram + SVC
+        GroundCardPredictor._load_model("ground_cards_predictor.svc")
+        return int(GroundCardPredictor.model.predict(features).item())
+
+        ## Backwards compatibility: raw histogram + scaling + logistic regression
+        # GroundCardPredictor._load_feature_transform_model("scaler_ground_cards_model.scaler")
+        # GroundCardPredictor._load_model("ground_cards_predictor.lr")
+        # features_scaled = GroundCardPredictor.feature_transform_model.transform(features)
+        # return int(GroundCardPredictor.model.predict(features_scaled).item())

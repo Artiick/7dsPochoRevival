@@ -193,7 +193,9 @@ def train_logistic_regressor(X: np.ndarray, labels: np.ndarray) -> LogisticRegre
     return logistic_regressor
 
 
-def train_logistic_regressor_with_scaling(X: np.ndarray, labels: np.ndarray) -> tuple[LogisticRegression, StandardScaler]:
+def train_logistic_regressor_with_scaling(
+    X: np.ndarray, labels: np.ndarray
+) -> tuple[LogisticRegression, StandardScaler]:
     """Train a logistic regressor after standardizing the input features"""
 
     X_train, X_test, y_train, y_test = train_test_split(X, labels, test_size=0.2, stratify=labels)
@@ -214,6 +216,23 @@ def train_logistic_regressor_with_scaling(X: np.ndarray, labels: np.ndarray) -> 
     test_model(logistic_regressor, X_scaled, labels)
 
     return logistic_regressor, scaler
+
+
+def train_svc_classifier_raw(X: np.ndarray, labels: np.ndarray) -> SVC:
+    """Train an SVC directly on the raw extracted features"""
+
+    X_train, X_test, y_train, y_test = train_test_split(X, labels, test_size=0.2, stratify=labels)
+
+    svc_model = SVC(kernel="rbf")
+    svc_model.fit(X_train, y_train)
+
+    test_model(svc_model, X_test, y_test)
+
+    svc_model.fit(X, labels)
+    print("Train accuracy on full refitted dataset:")
+    test_model(svc_model, X, labels)
+
+    return svc_model
 
 
 def test_model(model: KNeighborsClassifier | LogisticRegression | SVC, X_test: np.ndarray, y_test: np.ndarray):
@@ -318,10 +337,16 @@ def train_thor_cards_classifier():
 def train_ground_cards_classifier():
     """Train a model that distinguished between ground vs. no ground cards"""
 
+    # ## Current behavior: raw histogram + scaling + logistic regression
+    # features, labels = load_ground_cards_features_raw()
+    # model, scaler_model = train_logistic_regressor_with_scaling(X=features, labels=labels)
+    # save_model(model, filename="ground_cards_predictor.lr")
+    # save_model(scaler_model, filename="scaler_ground_cards_model.scaler")
+
+    # Alternative behavior: raw histogram + SVC
     features, labels = load_ground_cards_features_raw()
-    model, scaler_model = train_logistic_regressor_with_scaling(X=features, labels=labels)
-    save_model(model, filename="ground_cards_predictor.lr")
-    save_model(scaler_model, filename="scaler_ground_cards_model.scaler")
+    model = train_svc_classifier_raw(X=features, labels=labels)
+    save_model(model, filename="ground_cards_predictor.svc")
 
 
 def train_unit_type_classifier():
