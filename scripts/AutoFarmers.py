@@ -2576,7 +2576,7 @@ class MainWindow(QMainWindow):
 
         top_lay.addStretch(1)
 
-        self._view_toggle_btn = QPushButton("☰  List")
+        self._view_toggle_btn = QPushButton("⊞  Grid")
         self._view_toggle_btn.setStyleSheet(_BTN_TOP_STYLE)
         self._view_toggle_btn.clicked.connect(self._toggle_view)
         top_lay.addWidget(self._view_toggle_btn)
@@ -2622,7 +2622,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
-        self.stack.setCurrentWidget(self.grid_view)
+        self.stack.setCurrentWidget(self.list_view)
 
     def _wrap_with_back_bar(self, page_widget: QWidget, title: str = "") -> QWidget:
         wrapper = QWidget()
