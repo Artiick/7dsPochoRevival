@@ -461,6 +461,13 @@ FARMERS = [
                 "default": "chaos",
             },
             {
+                "name": "--indura-team",
+                "label": "Indura Team",
+                "type": "dropdown",
+                "choices": ["fairies", "humans"],
+                "default": "fairies",
+            },
+            {
                 "name": "--demons-to-farm",
                 "label": "Demons to Farm",
                 "type": "multiselect",

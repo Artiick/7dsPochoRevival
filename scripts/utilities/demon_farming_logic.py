@@ -73,6 +73,7 @@ class IDemonFarmer(IFarmer):
         do_daily_pvp=False,
         password: str | None = None,
         indura_difficulty: str = "extreme",  # Difficulty of Indura demon
+        indura_team: str = "fairies",
     ):
         super().__init__()
 
@@ -100,13 +101,15 @@ class IDemonFarmer(IFarmer):
 
         # For the Indura fight!
         self.indura_difficulty = indura_difficulty
+        self.indura_team = indura_team
+        indura_strategy = self._resolve_indura_strategy()
         self.fighter: IFighter = InduraFighter(
-            battle_strategy=InduraBattleStrategy,
+            battle_strategy=indura_strategy,
             callback=None,  # No need to use a fight complete callback for this
         )
         self.indura_fight_thread: threading.Thread = None
         if self.demon_to_farm == vio.indura_demon:
-            print(f"We'll farm {self.indura_difficulty} Indura!")
+            print(f"We'll farm {self.indura_difficulty} Indura with the {self.indura_team} team strategy!")
 
         IFarmer.do_dailies = do_dailies
         if do_dailies:
@@ -117,6 +120,25 @@ class IDemonFarmer(IFarmer):
         print(
             f"We destroyed {IDemonFarmer.demons_destroyed}/{IDemonFarmer.num_tries} demons and missed {IDemonFarmer.missed_invites} invites."
         )
+
+    def _resolve_indura_strategy(self) -> type[IBattleStrategy]:
+        """Resolve the configured Indura strategy, falling back to fairies when humans is unavailable."""
+        if self.indura_team == "fairies":
+            return InduraBattleStrategy
+
+        if self.indura_team == "humans":
+            try:
+                from utilities.indura_human_fighting_strategies import (
+                    InduraHumanBattleStrategy,
+                )
+
+                return InduraHumanBattleStrategy
+            except Exception:
+                print("[WARN] Human Indura strategy is not implemented yet. Falling back to fairies.")
+                self.indura_team = "fairies"
+                return InduraBattleStrategy
+
+        raise RuntimeError(f"Unknown Indura team: {self.indura_team}")
 
     def going_to_demons_state(self):
         """Go to the demons page"""
@@ -408,6 +430,7 @@ class DemonFarmer(IDemonFarmer):
         do_daily_pvp=False,  # If we do dailies, do we do PVP?
         password: str = None,
         indura_difficulty: str = "extreme",  # Difficulty of Indura demon
+        indura_team: str = "fairies",
     ):
         if demons_to_farm is None:
             demons_to_farm = [vio.og_demon]
@@ -422,6 +445,7 @@ class DemonFarmer(IDemonFarmer):
             do_daily_pvp=do_daily_pvp,
             password=password,
             indura_difficulty=indura_difficulty,
+            indura_team=indura_team,
         )
 
         # Every how many hours to switch between demons
