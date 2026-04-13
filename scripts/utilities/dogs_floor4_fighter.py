@@ -45,13 +45,14 @@ class DogsFloor4Fighter(DogsFighter):
         return entered
 
     def _maybe_increment_fight_turn_at_turn_start(self):
-        """Floor 4: count turns only at turn start, and only for normal 3+/4-slot openings.
+        """Floor 4: count turns at turn start using talent visibility first, slots second.
 
         Runs every MY_TURN loop tick before ``play_cards``; mid-turn ticks are skipped via ``picked_cards[0]``.
         Every Floor 4 phase starts from a fresh counter, and ``finish_turn`` never increments it.
         This keeps ``fight_turn`` meaning consistent across phases: it increments exactly once, at the
-        start of a normal turn. If units die and opening slots stay below 3, we accept that the counter
-        becomes best-effort and cleanup turns are not counted.
+        start of a turn. If Escalin talent is visible, that is treated as a definitive turn-start signal.
+        Otherwise we fall back to the normal 3+/4-slot opening rule. If units die and neither signal is
+        observed cleanly, the counter remains best-effort and cleanup turns may not be counted.
 
         Opening slot count may be nudged up from vision when it exceeds ``available_card_slots``
         (same idea as ``play_cards``).
@@ -64,12 +65,12 @@ class DogsFloor4Fighter(DogsFighter):
 
         screenshot, _ = capture_window()
         empty = DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)
-        if empty > self.available_card_slots:
-            self.available_card_slots = empty
-
-        if self.available_card_slots >= 3:
-            self.battle_strategy.increment_fight_turn()
-            DogsFloor4Fighter._fight_turn_incremented_at_turn_start = True
+        self._try_increment_fight_turn_from_start_signals(
+            screenshot,
+            empty_card_slots=empty,
+            talent_log="Turn start detected from talent_escalin visibility.",
+            slots_log_prefix="Turn start detected from empty card slots",
+        )
 
     def my_turn_state(self):
         self._identify_current_phase()
@@ -103,12 +104,8 @@ class DogsFloor4Fighter(DogsFighter):
     def _should_exit_before_play_cards(self) -> bool:
         is_turn_start = self.picked_cards[0].card_image is None
         fight_turn = self.battle_strategy.fight_turn
-        print(
-            "Phase 3 turn-limit evaluation:",
-            f"phase={IFighter.current_phase}",
-            f"fight_turn={fight_turn}",
-            f"is_turn_start={is_turn_start}",
-        )
+        if IFighter.current_phase == 3:
+            print(f"Phase 3 turn {fight_turn}")
         if IFighter.current_phase != 3 or not is_turn_start or fight_turn < 10:
             return False
 
@@ -120,7 +117,7 @@ class DogsFloor4Fighter(DogsFighter):
         return True
 
     def _before_pick_cards(self, *, screenshot, window_location, empty_card_slots: int) -> None:
-        """Floor 4 fallback: count a normal turn if slot detection stabilizes late inside ``play_cards``.
+        """Floor 4 fallback: count a turn late if talent or slot detection stabilizes inside ``play_cards``.
 
         Race we are handling:
         - ``_try_enter_my_turn`` and the early turn-start check may still see only 1 empty slot
@@ -135,10 +132,42 @@ class DogsFloor4Fighter(DogsFighter):
             return
         if self.picked_cards[0].card_image is not None:
             return
-        if empty_card_slots < 3:
-            return
+        self._try_increment_fight_turn_from_start_signals(
+            screenshot,
+            empty_card_slots=empty_card_slots,
+            talent_log="Late turn-start detection from talent_escalin visibility.",
+            slots_log_prefix="Late turn-start detection from empty card slots",
+        )
+
+    def _try_increment_fight_turn_from_start_signals(
+        self,
+        screenshot,
+        *,
+        empty_card_slots: int,
+        talent_log: str,
+        slots_log_prefix: str,
+    ) -> bool:
+        """Increment once from Floor 4 turn-start signals.
+
+        Talent visibility is treated as definitive. When talent is absent, we
+        fall back to the normal 3+/4-slot opening rule.
+        """
+        if find(vio.talent_escalin, screenshot, threshold=0.7):
+            print(talent_log)
+            self.battle_strategy.increment_fight_turn()
+            DogsFloor4Fighter._fight_turn_incremented_at_turn_start = True
+            return True
+
+        if empty_card_slots > self.available_card_slots:
+            self.available_card_slots = empty_card_slots
+
+        if self.available_card_slots < 3:
+            return False
+
+        print(f"{slots_log_prefix}: available_card_slots={self.available_card_slots}")
         self.battle_strategy.increment_fight_turn()
         DogsFloor4Fighter._fight_turn_incremented_at_turn_start = True
+        return True
 
     def finish_turn(self):
         # Floor 4 turn counting is start-only for every phase. We deliberately avoid end-of-turn
