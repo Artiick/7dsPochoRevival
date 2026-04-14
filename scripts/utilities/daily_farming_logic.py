@@ -505,7 +505,9 @@ class DailyFarmer:
             # Go to the mission
             self.go_to_mission(vio.daily_friendship_coins, screenshot, window_location)
 
-        if find_and_click(vio.send_friendship_coins, screenshot, window_location, threshold=0.8):
+        if find(vio.send_friendship_coins, screenshot, threshold=0.8):
+            time.sleep(2)  # Necessary in case Hawk is loading...
+            find_and_click(vio.send_friendship_coins, screenshot, window_location, threshold=0.8)
             DailyFarmer.current_state = States.MISSION_COMPLETE_STATE
             return
 
