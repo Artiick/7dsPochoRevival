@@ -2,13 +2,11 @@
 
 from collections.abc import Callable
 
-import numpy as np
 import utilities.vision_images as vio
-from utilities.card_data import CardTypes
 from utilities.dogs_fighter import DogsFighter
 from utilities.dogs_floor4_fighting_strategies import DogsFloor4BattleStrategy
 from utilities.general_fighter_interface import FightingStates, IFighter
-from utilities.utilities import capture_window, find, get_hand_cards
+from utilities.utilities import capture_window, find
 
 
 class DogsFloor4Fighter(DogsFighter):
@@ -180,11 +178,7 @@ class DogsFloor4Fighter(DogsFighter):
     def _check_disabled_hand(self) -> bool:
         """If we have a disabled hand (same criteria as BirdFighter)."""
         screenshot, _ = capture_window()
-        house_of_cards = get_hand_cards()
-
-        return np.all([card.card_type in [CardTypes.DISABLED, CardTypes.GROUND] for card in house_of_cards]) or find(
-            vio.skill_locked, screenshot, threshold=0.6
-        )
+        return find(vio.skill_locked, screenshot, threshold=0.6)
 
     def _identify_current_phase(self):
         prev = IFighter.current_phase
