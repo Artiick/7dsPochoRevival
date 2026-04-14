@@ -23,7 +23,15 @@ import sys
 import time
 from dataclasses import dataclass
 
-from PyQt5.QtCore import QObject, QProcess, QProcessEnvironment, Qt, QTimer, QUrl, pyqtSignal
+from PyQt5.QtCore import (
+    QObject,
+    QProcess,
+    QProcessEnvironment,
+    Qt,
+    QTimer,
+    QUrl,
+    pyqtSignal,
+)
 from PyQt5.QtGui import (
     QColor,
     QDesktopServices,
@@ -51,12 +59,12 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
     QSpinBox,
     QStackedWidget,
-    QProgressBar,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -90,55 +98,55 @@ FREE_SOFTWARE_MESSAGE = """=====================================================
 
 # Tokyo Night (dark) palette
 C_DARK = {
-    "bg":           "#0f0f17",
-    "panel":        "#171724",
-    "panel2":       "#1e1e2e",
-    "panel3":       "#1a1a2e",
-    "border":       "#252535",
-    "border2":      "#2e2e45",
-    "accent":       "#8b5cf6",
+    "bg": "#0f0f17",
+    "panel": "#171724",
+    "panel2": "#1e1e2e",
+    "panel3": "#1a1a2e",
+    "border": "#252535",
+    "border2": "#2e2e45",
+    "accent": "#8b5cf6",
     "accent_light": "#c4b5fd",
-    "running":      "#10b981",
-    "warning":      "#f59e0b",
-    "error":        "#ef4444",
-    "blue":         "#3b82f6",
-    "text":         "#e2e8f0",
-    "dim":          "#9ca3af",
-    "muted":        "#6b7280",
-    "dark":         "#4b5563",
-    "darker":       "#374151",
-    "term_bg":      "#16161e",
-    "term_text":    "#c0caf5",
-    "tile_bg":      "#171724",
-    "tile_hover":   "#1e1e2e",
-    "btn_sec_bg":   "transparent",
+    "running": "#10b981",
+    "warning": "#f59e0b",
+    "error": "#ef4444",
+    "blue": "#3b82f6",
+    "text": "#e2e8f0",
+    "dim": "#9ca3af",
+    "muted": "#6b7280",
+    "dark": "#4b5563",
+    "darker": "#374151",
+    "term_bg": "#16161e",
+    "term_text": "#c0caf5",
+    "tile_bg": "#171724",
+    "tile_hover": "#1e1e2e",
+    "btn_sec_bg": "transparent",
     "btn_sec_text": "#6b7280",
 }
 
 # Light palette
 C_LIGHT = {
-    "bg":           "#F4F7FB",
-    "panel":        "#E9F1FF",
-    "panel2":       "#eef4ff",
-    "panel3":       "#e2ecff",
-    "border":       "#D6E4FF",
-    "border2":      "#c5d8ff",
-    "accent":       "#3B82F6",
+    "bg": "#F4F7FB",
+    "panel": "#E9F1FF",
+    "panel2": "#eef4ff",
+    "panel3": "#e2ecff",
+    "border": "#D6E4FF",
+    "border2": "#c5d8ff",
+    "accent": "#3B82F6",
     "accent_light": "#1d4ed8",
-    "running":      "#16a34a",
-    "warning":      "#d97706",
-    "error":        "#dc2626",
-    "blue":         "#2563eb",
-    "text":         "#1A2A44",
-    "dim":          "#2d4a6e",
-    "muted":        "#5a7a9f",
-    "dark":         "#8aaac8",
-    "darker":       "#dbe8f8",
-    "term_bg":      "#1e1e2e",
-    "term_text":    "#c0caf5",
-    "tile_bg":      "#FFFFFF",
-    "tile_hover":   "#EEF4FF",
-    "btn_sec_bg":   "#E5EDFF",
+    "running": "#16a34a",
+    "warning": "#d97706",
+    "error": "#dc2626",
+    "blue": "#2563eb",
+    "text": "#1A2A44",
+    "dim": "#2d4a6e",
+    "muted": "#5a7a9f",
+    "dark": "#8aaac8",
+    "darker": "#dbe8f8",
+    "term_bg": "#1e1e2e",
+    "term_text": "#c0caf5",
+    "tile_bg": "#FFFFFF",
+    "tile_hover": "#EEF4FF",
+    "btn_sec_bg": "#E5EDFF",
     "btn_sec_text": "#3B82F6",
 }
 
@@ -149,6 +157,7 @@ _CONFIG_DIR = os.path.join(_BASE_DIR, "config")
 os.makedirs(_CONFIG_DIR, exist_ok=True)
 
 _THEME_FILE = os.path.join(_CONFIG_DIR, ".theme")
+
 
 def _load_theme() -> str:
     try:
@@ -177,18 +186,20 @@ def _restart_application() -> bool:
         return started[0]
     return bool(started)
 
+
 _ACTIVE_THEME = _load_theme()
 C = C_LIGHT if _ACTIVE_THEME == "light" else C_DARK
 
-# Action Button Styles 
+# Action Button Styles
 _BTN = "color: white; font-weight: bold; padding: 7px 4px; border: none; border-radius: 6px;"
-BTN_START  = f"background-color: {C['accent']}; {_BTN}"
-BTN_STOP   = f"background-color: {C['error']}; {_BTN}"
-BTN_PAUSE  = f"background-color: {C['warning']}; {_BTN}"
+BTN_START = f"background-color: {C['accent']}; {_BTN}"
+BTN_STOP = f"background-color: {C['error']}; {_BTN}"
+BTN_PAUSE = f"background-color: {C['warning']}; {_BTN}"
 BTN_RESIZE = f"background-color: {C['blue']}; {_BTN}"
-BTN_CLEAR  = f"background-color: {C['darker']}; color: {C['text']}; font-weight: bold; padding: 7px 4px; border: none; border-radius: 6px;"
+BTN_CLEAR = f"background-color: {C['darker']}; color: {C['text']}; font-weight: bold; padding: 7px 4px; border: none; border-radius: 6px;"
 
 _GUI_IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "gui_images")
+
 
 def _make_stylesheet() -> str:
     check_icon = os.path.join(_GUI_IMAGES_DIR, "check.svg").replace("\\", "/")
@@ -322,6 +333,7 @@ QTextEdit {{
 }}
 """
 
+
 APP_STYLESHEET = _make_stylesheet()
 
 # Requirements for whale farmers (displayed in GUI)
@@ -397,13 +409,13 @@ Tune your gear so you can guarantee that.<br>
 • Sariel link on SJW and Mael link on Light Escanor</p>
     """,
     "Demon King Farmer": """
-<p><strong>Requirements</strong></p>
 <p><strong>Hard</strong><br>
 • Team A: Skuld (att/crit), any 3 boosters<br>
 • Team B: Anything (not used)</p>
 <p><strong>Hell</strong><br>
 • Team A: DK Meli, Cusack, Green Gelda, Green Melascula<br>
 • Team B: Skuld, Red Freyr, Red Skadi, Blue Matrona</p>
+<p><strong>Important:</strong> <em>Use Hell mode only to farm the SSR card</em></p>
     """,
     "Reroll Constellation": """
 <p><strong>Requirements:</strong><br>
@@ -990,10 +1002,7 @@ class FarmerController(QObject):
                 self.session_progress_changed.emit()
 
         _HIDDEN_MARKERS = {"[CLEAR]", "[POT]", "[LOSS]"}
-        new_lines = [
-            line for line in text.splitlines(True)
-            if line.strip() not in _HIDDEN_MARKERS
-        ]
+        new_lines = [line for line in text.splitlines(True) if line.strip() not in _HIDDEN_MARKERS]
         self.output_lines.extend(new_lines)
         if len(self.output_lines) > 1000:
             self.output_lines = self.output_lines[-1000:]
@@ -1037,6 +1046,7 @@ class FarmerController(QObject):
 
     def _emit_status_snapshot(self):
         self.status_snapshot_changed.emit(self.get_status_snapshot())
+
 
 # Farmer scripts that accept --password / -p (must match argparse in each script).
 PASSWORD_CLI_SCRIPTS = frozenset(
@@ -1137,7 +1147,9 @@ class AboutTab(QWidget):
         if not image_loaded:
             img_label.setText("🖼️ AutoFarmers GUI\n(Image not found)")
             img_label.setFixedSize(640, 360)
-            img_label.setStyleSheet(f"border: 1px solid {C['border']}; background: {C['panel2']}; color: {C['dark']}; border-radius: 8px; font-size: 14px;")
+            img_label.setStyleSheet(
+                f"border: 1px solid {C['border']}; background: {C['panel2']}; color: {C['dark']}; border-radius: 8px; font-size: 14px;"
+            )
 
         # Center the image
         img_layout = QHBoxLayout()
@@ -1156,7 +1168,9 @@ class AboutTab(QWidget):
 
         # Update button (primary)
         self.update_btn = QPushButton("🔄 UPDATE")
-        self.update_btn.setStyleSheet(f"background-color: {C['accent']}; color: white; font-weight: bold; padding: 8px 16px;")
+        self.update_btn.setStyleSheet(
+            f"background-color: {C['accent']}; color: white; font-weight: bold; padding: 8px 16px;"
+        )
         self.update_btn.clicked.connect(self.on_update_clicked)
         btn_layout.addWidget(self.update_btn)
 
@@ -1377,18 +1391,14 @@ class AboutTab(QWidget):
             return
 
         if not self._restart_safe_supplier():
-            self.status_label.setText(
-                "✅ Update complete - restart required because AutoFarmers.py changed"
-            )
+            self.status_label.setText("✅ Update complete - restart required because AutoFarmers.py changed")
             self._finish_update(clear_status=False)
             return
 
         self.status_label.setText("✅ Update complete - restarting GUI...")
         self._finish_update(clear_status=False)
         if not _restart_application():
-            self.status_label.setText(
-                "✅ Update complete - GUI restart failed; please reopen manually"
-            )
+            self.status_label.setText("✅ Update complete - GUI restart failed; please reopen manually")
             return
         QApplication.instance().quit()
 
@@ -1512,10 +1522,14 @@ class SettingsTab(QWidget):
 
         actions = QHBoxLayout()
         self.save_btn = QPushButton("Save")
-        self.save_btn.setStyleSheet(f"background-color: {C['running']}; color: white; font-weight: bold; padding: 7px 20px; border: none; border-radius: 6px;")
+        self.save_btn.setStyleSheet(
+            f"background-color: {C['running']}; color: white; font-weight: bold; padding: 7px 20px; border: none; border-radius: 6px;"
+        )
         self.save_btn.clicked.connect(self.on_save)
         self.reload_btn = QPushButton("Load saved")
-        self.reload_btn.setStyleSheet(f"background-color: {C['darker']}; color: {C['text']}; font-weight: bold; padding: 7px 20px; border: none; border-radius: 6px;")
+        self.reload_btn.setStyleSheet(
+            f"background-color: {C['darker']}; color: {C['text']}; font-weight: bold; padding: 7px 20px; border: none; border-radius: 6px;"
+        )
         self.reload_btn.clicked.connect(self.reload_from_disk)
         actions.addWidget(self.save_btn)
         actions.addWidget(self.reload_btn)
@@ -1584,14 +1598,16 @@ class SettingsTab(QWidget):
         ok, msg = test_ntfy_connection()
         self.status_label.setText(msg)
         self.status_label.setStyleSheet("color: #10b981;" if ok else "color: #ef4444;")
+
+
 class FarmerTab(QWidget):
     _COLOR_TAG_RE = re.compile(r"<color=([^>]+)>(.*?)</color>", re.IGNORECASE | re.DOTALL)
     _LINE_COLOR_RULES = [
         (re.compile(r"error|failed|exception|traceback|critical", re.I), "#ef4444"),
-        (re.compile(r"\bwarn(ing)?\b", re.I),                            "#f59e0b"),
-        (re.compile(r"success|complet|finished|victory|cleared|✓|✅",   re.I), "#10b981"),
-        (re.compile(r"\b(info|start|launch|connect|running)\b",          re.I), "#3b82f6"),
-        (re.compile(r"^\s*[>=\-#]{3,}"),                                 "#4b5563"),
+        (re.compile(r"\bwarn(ing)?\b", re.I), "#f59e0b"),
+        (re.compile(r"success|complet|finished|victory|cleared|✓|✅", re.I), "#10b981"),
+        (re.compile(r"\b(info|start|launch|connect|running)\b", re.I), "#3b82f6"),
+        (re.compile(r"^\s*[>=\-#]{3,}"), "#4b5563"),
     ]
 
     def __init__(self, farmer, controller, parent=None):
@@ -1627,8 +1643,7 @@ class FarmerTab(QWidget):
         self.image_label = QLabel(f"[Image Placeholder]\n{self.image_size[0]}x{self.image_size[1]}")
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setStyleSheet(
-            f"border: 1px solid {C['border']}; background: {C['panel2']};"
-            f" color: {C['dark']}; border-radius: 5px;"
+            f"border: 1px solid {C['border']}; background: {C['panel2']};" f" color: {C['dark']}; border-radius: 5px;"
         )
         self.image_label.setFixedSize(*self.image_size)
         self.load_farmer_image()
@@ -1763,9 +1778,7 @@ class FarmerTab(QWidget):
     def _build_session_progress(self):
         """Widget shown below the terminal with session stats."""
         container = QFrame()
-        container.setStyleSheet(
-            f"background: {C['panel2']}; border-top: 1px solid {C['border2']}; border-radius: 5px;"
-        )
+        container.setStyleSheet(f"background: {C['panel2']}; border-top: 1px solid {C['border2']}; border-radius: 5px;")
         outer = QHBoxLayout(container)
         outer.setContentsMargins(14, 10, 14, 10)
         outer.setSpacing(0)
@@ -1782,13 +1795,10 @@ class FarmerTab(QWidget):
             row = QHBoxLayout()
             row.setSpacing(4)
             key = QLabel(key_text)
-            key.setStyleSheet(
-                f"color: {C['dim']}; font-size: 13px; background: transparent; border: none;"
-            )
+            key.setStyleSheet(f"color: {C['dim']}; font-size: 13px; background: transparent; border: none;")
             val = QLabel(value_text)
             val.setStyleSheet(
-                f"color: {C['text']}; font-size: 13px; font-weight: 600;"
-                " background: transparent; border: none;"
+                f"color: {C['text']}; font-size: 13px; font-weight: 600;" " background: transparent; border: none;"
             )
             val.setAlignment(Qt.AlignRight)
             row.addWidget(key)
@@ -1820,15 +1830,13 @@ class FarmerTab(QWidget):
         left_lay.addWidget(section_label("CLEARS"))
         left_lay.addSpacing(4)
         left_lay.addStretch()
-        self._sp_clears_lbl,  self._sp_clears_bar  = make_bar_metric(
+        self._sp_clears_lbl, self._sp_clears_bar = make_bar_metric(
             left_lay, "Clears", "0", bar_max=100, bar_color=C["accent"]
         )
         left_lay.addStretch()
-        self._sp_pots_lbl, self._sp_pots_bar = make_bar_metric(
-            left_lay, "Stamina Pots", "0", bar_color="#f59e0b"
-        )
+        self._sp_pots_lbl, self._sp_pots_bar = make_bar_metric(left_lay, "Stamina Pots", "0", bar_color="#f59e0b")
         left_lay.addStretch()
-        self._sp_uptime_lbl,  self._sp_uptime_bar  = make_bar_metric(
+        self._sp_uptime_lbl, self._sp_uptime_bar = make_bar_metric(
             left_lay, "Uptime", "00:00:00", bar_max=_UPTIME_CYCLE_SECS, bar_color=C["blue"]
         )
         left_lay.addStretch()
@@ -1846,13 +1854,13 @@ class FarmerTab(QWidget):
         right_lay.addWidget(section_label("INFO"))
         right_lay.addSpacing(4)
         self._sp_last_clear_lbl = make_row(right_lay, "Last clear", "--")
-        self._sp_farming_lbl    = make_row(right_lay, "Farming", self.farmer["name"])
+        self._sp_farming_lbl = make_row(right_lay, "Farming", self.farmer["name"])
         right_lay.addSpacing(4)
-        self._sp_wins_lbl  = make_row(right_lay, "Wins",       "0")
+        self._sp_wins_lbl = make_row(right_lay, "Wins", "0")
         self._sp_wins_lbl.setStyleSheet(
             "color: #10b981; font-size: 13px; font-weight: 600; background: transparent; border: none;"
         )
-        self._sp_loss_lbl  = make_row(right_lay, "Loss",       "0")
+        self._sp_loss_lbl = make_row(right_lay, "Loss", "0")
         self._sp_loss_lbl.setStyleSheet(
             "color: #ef4444; font-size: 13px; font-weight: 600; background: transparent; border: none;"
         )
@@ -1928,9 +1936,11 @@ class FarmerTab(QWidget):
             widget.toggled.connect(lambda value, n=name: self.controller.set_arg_value(n, value))
         elif arg["type"] == "multiselect":
             for checkbox in widget._checkboxes:
-                checkbox.toggled.connect(lambda _checked, n=name, frame=widget: self.controller.set_arg_value(
-                    n, [cb.text() for cb in frame._checkboxes if cb.isChecked()]
-                ))
+                checkbox.toggled.connect(
+                    lambda _checked, n=name, frame=widget: self.controller.set_arg_value(
+                        n, [cb.text() for cb in frame._checkboxes if cb.isChecked()]
+                    )
+                )
         else:
             widget.textChanged.connect(lambda value, n=name: self.controller.set_arg_value(n, value))
 
@@ -2006,7 +2016,7 @@ class FarmerTab(QWidget):
         full_text = "".join(lines)
 
         for segment_text, segment_color in self._parse_color_segments(full_text):
-            sub_lines = segment_text.split('\n')
+            sub_lines = segment_text.split("\n")
             for i, sub_line in enumerate(sub_lines):
                 fmt = QTextCharFormat(self._default_fmt)
                 if segment_color is not None:
@@ -2097,10 +2107,10 @@ class FarmerTab(QWidget):
             self._sp_clears_bar.setValue(0)
 
         # Wins / Loss / Total / Win Rate
-        wins   = snapshot.session_clears
+        wins = snapshot.session_clears
         losses = snapshot.session_losses
-        total  = wins + losses
-        rate   = int(wins / total * 100) if total > 0 else 0
+        total = wins + losses
+        rate = int(wins / total * 100) if total > 0 else 0
         self._sp_wins_lbl.setText(str(wins))
         self._sp_loss_lbl.setText(str(losses))
         self._sp_total_lbl.setText(str(total))
@@ -2178,11 +2188,11 @@ def _rounded_pixmap(pixmap: QPixmap, radius: int) -> QPixmap:
     path = QPainterPath()
     path.moveTo(radius, 0)
     path.lineTo(w - radius, 0)
-    path.quadTo(w, 0, w, radius)   # top-right
+    path.quadTo(w, 0, w, radius)  # top-right
     path.lineTo(w, h)
     path.lineTo(0, h)
     path.lineTo(0, radius)
-    path.quadTo(0, 0, radius, 0)   # top-left
+    path.quadTo(0, 0, radius, 0)  # top-left
     path.closeSubpath()
     painter.setClipPath(path)
     painter.drawPixmap(0, 0, pixmap)
@@ -2205,9 +2215,10 @@ class FarmerTile(QFrame):
         self._init_ui(farmer)
 
     def _set_style(self, running: bool):
-        border = "#10b981" if running else C['border']
-        hover_border = "#10b981" if running else C['accent']
-        self.setStyleSheet(f"""
+        border = "#10b981" if running else C["border"]
+        hover_border = "#10b981" if running else C["accent"]
+        self.setStyleSheet(
+            f"""
             FarmerTile {{
                 background: {C['tile_bg']};
                 border: 2px solid {border};
@@ -2217,7 +2228,8 @@ class FarmerTile(QFrame):
                 border-color: {hover_border};
                 background: {C['tile_hover']};
             }}
-        """)
+        """
+        )
 
     def _init_ui(self, farmer):
         layout = QVBoxLayout(self)
@@ -2246,10 +2258,7 @@ class FarmerTile(QFrame):
             if os.path.exists(image_path):
                 pixmap = QPixmap(image_path)
                 if not pixmap.isNull():
-                    scaled = pixmap.scaled(
-                        _img_w, self._IMG_H,
-                        Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
-                    )
+                    scaled = pixmap.scaled(_img_w, self._IMG_H, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
                     x = max(0, (scaled.width() - _img_w) // 2)
                     y = max(0, (scaled.height() - self._IMG_H) // 2)
                     cropped = scaled.copy(x, y, _img_w, self._IMG_H)
@@ -2263,9 +2272,7 @@ class FarmerTile(QFrame):
         body_lay.setSpacing(2)
 
         name_label = QLabel(farmer["name"])
-        name_label.setStyleSheet(
-            f"font-size: 15px; font-weight: 600; color: {C['text']};"
-        )
+        name_label.setStyleSheet(f"font-size: 15px; font-weight: 600; color: {C['text']};")
         name_label.setWordWrap(True)
         name_label.setAlignment(Qt.AlignCenter)
         body_lay.addWidget(name_label)
@@ -2305,6 +2312,7 @@ class FarmerTile(QFrame):
 
 # Grid View
 
+
 class GridView(QWidget):
     farmer_selected = pyqtSignal(str)
 
@@ -2332,7 +2340,7 @@ class GridView(QWidget):
         v_lay.setContentsMargins(0, 24, 0, 24)
         v_lay.setSpacing(9)
 
-        rows = [farmers[i:i + self._COLS] for i in range(0, len(farmers), self._COLS)]
+        rows = [farmers[i : i + self._COLS] for i in range(0, len(farmers), self._COLS)]
         for row_farmers in rows:
             row = QHBoxLayout()
             row.setSpacing(9)
@@ -2360,7 +2368,8 @@ class GridView(QWidget):
             self._tiles[farmer_name].set_running(running)
 
 
-# Detail View 
+# Detail View
+
 
 class DetailView(QWidget):
     """Wraps a FarmerTab with the detail bar (← Back + name + running status)."""
@@ -2376,9 +2385,7 @@ class DetailView(QWidget):
         # ── Detail bar ──
         detail_bar = QWidget()
         detail_bar.setFixedHeight(40)
-        detail_bar.setStyleSheet(
-            f"background: {C['panel']}; border-bottom: 1px solid {C['border']};"
-        )
+        detail_bar.setStyleSheet(f"background: {C['panel']}; border-bottom: 1px solid {C['border']};")
         bar_lay = QHBoxLayout(detail_bar)
         bar_lay.setContentsMargins(18, 0, 18, 0)
         bar_lay.setSpacing(12)
@@ -2416,6 +2423,7 @@ class DetailView(QWidget):
 
 # List View
 
+
 class ListView(QWidget):
     """Sidebar list + right content panel (alternative to grid)."""
 
@@ -2435,9 +2443,7 @@ class ListView(QWidget):
         # ── Left sidebar ──
         sidebar = QWidget()
         sidebar.setFixedWidth(230)
-        sidebar.setStyleSheet(
-            f"background: {C['panel']}; border-right: 1px solid {C['border']};"
-        )
+        sidebar.setStyleSheet(f"background: {C['panel']}; border-right: 1px solid {C['border']};")
         sidebar_lay = QVBoxLayout(sidebar)
         sidebar_lay.setContentsMargins(0, 8, 0, 8)
         sidebar_lay.setSpacing(0)
@@ -2480,7 +2486,9 @@ class ListView(QWidget):
         # Indices 1+: FarmerTabs
         for farmer in self._farmers:
             controller = self._controllers[farmer["name"]]
-            controller.running_changed.connect(lambda running, pid, n=farmer["name"]: self._on_running_changed(n, running))
+            controller.running_changed.connect(
+                lambda running, pid, n=farmer["name"]: self._on_running_changed(n, running)
+            )
             tab = FarmerTab(farmer, controller)
             self._stack.addWidget(tab)
             self._farmer_tabs[farmer["name"]] = tab
@@ -2503,10 +2511,10 @@ class ListView(QWidget):
             return
         if running:
             item.setText("●  " + name)
-            item.setForeground(QColor(C['running']))
+            item.setForeground(QColor(C["running"]))
         else:
             item.setText("  " + name)
-            item.setForeground(QColor(C['dim']))
+            item.setForeground(QColor(C["dim"]))
 
     def show_about(self):
         self._list.setCurrentRow(0)
@@ -2569,9 +2577,7 @@ class MainWindow(QMainWindow):
         # ── Top bar ──
         top_bar = QWidget()
         top_bar.setFixedHeight(56)
-        top_bar.setStyleSheet(
-            f"background: {C['panel']}; border-bottom: 2px solid {C['border']};"
-        )
+        top_bar.setStyleSheet(f"background: {C['panel']}; border-bottom: 2px solid {C['border']};")
         top_lay = QHBoxLayout(top_bar)
         top_lay.setContentsMargins(20, 0, 20, 0)
         top_lay.setSpacing(14)
