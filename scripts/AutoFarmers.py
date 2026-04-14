@@ -397,10 +397,13 @@ Tune your gear so you can guarantee that.<br>
 • Sariel link on SJW and Mael link on Light Escanor</p>
     """,
     "Demon King Farmer": """
-<p><strong>Requirements:</strong><br>
+<p><strong>Requirements</strong></p>
+<p><strong>Hard</strong><br>
 • Team A: Skuld (att/crit), any 3 boosters<br>
-• Team B: Anything, won't be used</p>
-<p><em>Note: Hard, Extreme, and Hell are selectable. If an Extreme/Hell strategy is unavailable, the bot falls back to Hard difficulty and the Hard strategy.</em></p>
+• Team B: Anything (not used)</p>
+<p><strong>Hell</strong><br>
+• Team A: DK Meli, Cusack, Green Gelda, Green Melascula<br>
+• Team B: Skuld, Red Freyr, Red Skadi, Blue Matrona</p>
     """,
     "Reroll Constellation": """
 <p><strong>Requirements:</strong><br>

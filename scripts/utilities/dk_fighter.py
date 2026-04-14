@@ -26,6 +26,16 @@ class DemonKingFighter(IFighter):
     # Color dictionary of cards
     color_cards_dict = defaultdict(list)
 
+    def __init__(
+        self,
+        battle_strategy,
+        callback=None,
+        *,
+        enable_phase2_team_switch: bool = False,
+    ):
+        self._enable_phase2_team_switch = enable_phase2_team_switch
+        super().__init__(battle_strategy, callback)
+
     def _set_list_of_unit_colors(self, list_of_unit_colors: list[CardColors]):
         self._list_of_unit_colors = list_of_unit_colors
 
@@ -60,7 +70,8 @@ class DemonKingFighter(IFighter):
             DemonKingFighter.color_cards_dict[color].append(hand_of_cards[idx * 2].card_image)
             DemonKingFighter.color_cards_dict[color].append(hand_of_cards[idx * 2 + 1].card_image)
 
-        print("Built dictionary of card colors! With these colors:", list(DemonKingFighter.color_cards_dict.keys()))
+        color_summary = {color.name: len(cards) for color, cards in DemonKingFighter.color_cards_dict.items()}
+        print(f"Built dictionary of card colors! Stored {sum(color_summary.values())} cards: {color_summary}")
 
     @staticmethod
     def _identify_phase(screenshot: np.ndarray):
@@ -77,12 +88,12 @@ class DemonKingFighter(IFighter):
         """Select and play the cards"""
         screenshot, window_location = capture_window()
 
-        # if IFighter.current_phase == 2 and DemonKingFighter.current_team == 0:
-        #     find_and_click(vio.switch_dk_team, screenshot, window_location)
-        #     print("Switching teams...")
-        #     DemonKingFighter.current_team = 1
-        #     # And let's sleep for a couple seconds
-        #     time.sleep(5)
+        # Hell DK: switch to the second team in UI before phase-2 level rules / hand layout.
+        if self._enable_phase2_team_switch and IFighter.current_phase == 2 and DemonKingFighter.current_team == 0:
+            find_and_click(vio.switch_dk_team, screenshot, window_location)
+            print("Switching teams...")
+            DemonKingFighter.current_team = 1
+            time.sleep(5)
 
         # Just play the cards
         self.play_cards(dk_team=DemonKingFighter.current_team, color_cards_dict=DemonKingFighter.color_cards_dict)
@@ -114,6 +125,7 @@ class DemonKingFighter(IFighter):
     @IFighter.run_wrapper
     def run(self, unit_colors: list[CardColors]):
 
+        DemonKingFighter.current_team = 0
         print("[Fighter] Successfully received these unit colors: ", [utype.name for utype in unit_colors])
         self._set_list_of_unit_colors(unit_colors)
 

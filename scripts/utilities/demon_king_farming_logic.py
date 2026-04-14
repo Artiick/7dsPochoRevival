@@ -8,8 +8,8 @@ import pyautogui as pyautogui
 import utilities.vision_images as vio
 from utilities.card_data import CardColors
 from utilities.coordinates import Coordinates
-from utilities.dk_hard_fighting_strategies import DemonKingHardBattleStrategy
 from utilities.dk_fighter import DemonKingFighter
+from utilities.dk_hard_fighting_strategies import DemonKingHardBattleStrategy
 from utilities.general_farmer_interface import CHECK_IN_HOUR, IFarmer
 from utilities.general_farmer_interface import States as GlobalStates
 from utilities.general_fighter_interface import IBattleStrategy, IFighter
@@ -73,6 +73,7 @@ class DemonKingFarmer(IFarmer):
         self.fighter: IFighter = DemonKingFighter(
             battle_strategy=dk_strategy,
             callback=self.fight_complete_callback,
+            enable_phase2_team_switch=(DemonKingFarmer.dk_difficulty == "hell"),
         )
         self.dk_fighting_thread: threading.Thread = None
 
@@ -80,16 +81,6 @@ class DemonKingFarmer(IFarmer):
         """Resolve the configured Demon King strategy, falling back to hard when unavailable."""
         if DemonKingFarmer.dk_difficulty == "hard":
             return DemonKingHardBattleStrategy
-
-        if DemonKingFarmer.dk_difficulty == "extreme":
-            try:
-                from utilities.dk_extreme_fighting_strategies import (
-                    DemonKingExtremeBattleStrategy,
-                )
-
-                return DemonKingExtremeBattleStrategy
-            except Exception as exc:
-                return self._fallback_to_hard_difficulty("Extreme", exc)
 
         if DemonKingFarmer.dk_difficulty == "hell":
             try:
@@ -116,8 +107,6 @@ class DemonKingFarmer(IFarmer):
         """Click on the desired difficulty"""
         if DemonKingFarmer.dk_difficulty == "hell":
             find_and_click(vio.dk_hell, screenshot, window_location)
-        elif DemonKingFarmer.dk_difficulty == "extreme":
-            find_and_click(vio.dk_extreme, screenshot, window_location)
         elif DemonKingFarmer.dk_difficulty == "hard":
             find_and_click(vio.dk_hard, screenshot, window_location)
 

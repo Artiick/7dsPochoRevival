@@ -1,14 +1,13 @@
 import numpy as np
 import utilities.vision_images as vio
-from utilities.card_data import Card, CardColors, CardRanks, CardTypes
+from utilities.card_data import Card, CardRanks, CardTypes
 from utilities.coordinates import Coordinates
 from utilities.fighting_strategies import IBattleStrategy, SmarterBattleStrategy
-from utilities.pattern_match_strategies import TemplateMatchingStrategy
-from utilities.utilities import capture_window, count_needle_image, crop_region, find
+from utilities.utilities import capture_window, crop_region, find
 
 
-class DemonKingHardBattleStrategy(IBattleStrategy):
-    """Demon King hard-difficulty battle strategy"""
+class DemonKingHellBattleStrategy(IBattleStrategy):
+    """Demon King hell difficulty: level-based rule windows and phase-2 card logic."""
 
     def get_next_card_index(
         self,
@@ -17,40 +16,32 @@ class DemonKingHardBattleStrategy(IBattleStrategy):
         *,
         phase: int = 1,
         card_turn=0,
-        color_cards_dict: dict[CardColors, list[np.ndarray]] | None = None,
         **kwargs,
     ) -> int:
         """Extract the next card index based on the hand and picked cards information,
         together with the current floor and phase.
         """
 
-        colors = color_cards_dict if color_cards_dict is not None else {}
         return (
             self.get_next_card_index_phase1(hand_of_cards, picked_cards)
             if phase == 1
-            else self.get_next_card_index_phase2(hand_of_cards, picked_cards, card_turn, colors)
+            else self.get_next_card_index_phase2(hand_of_cards, picked_cards, card_turn)
         )
 
     def get_next_card_index_phase1(self, hand_of_cards: list[Card], picked_cards: list[Card]) -> int:
         """We should be able to 1-turn it!"""
 
-        if len(gelda_card_id := [i for i, card in enumerate(hand_of_cards) if find(vio.gelda_card, card.card_image)]):
+        if len(gelda_card_id := np.where([find(vio.gelda_card, card.card_image) for card in hand_of_cards])[0]):
             return gelda_card_id[-1]
-        if len(cusack_card_id := [i for i, card in enumerate(hand_of_cards) if find(vio.cusack_cleave, card.card_image)]):
+        if len(cusack_card_id := np.where([find(vio.cusack_cleave, card.card_image) for card in hand_of_cards])[0]):
             return cusack_card_id[-1]
-        if len(meli_card_id := [i for i, card in enumerate(hand_of_cards) if find(vio.dk_meli_st, card.card_image)]):
+        if len(meli_card_id := np.where([find(vio.dk_meli_st, card.card_image) for card in hand_of_cards])[0]):
             return meli_card_id[-1]
 
         # Otherwise, we cannot kill it in 1 turns, so let's default to regular strategy
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
-    def get_next_card_index_phase2(
-        self,
-        hand_of_cards: list[Card],
-        picked_cards: list[Card],
-        card_turn: int,
-        color_cards_dict: dict[CardColors, list[np.ndarray]],
-    ) -> int:
+    def get_next_card_index_phase2(self, hand_of_cards: list[Card], picked_cards: list[Card], card_turn: int) -> int:
         """We should be able to 1-turn it!"""
         screenshot, _ = capture_window()
 
@@ -58,11 +49,11 @@ class DemonKingHardBattleStrategy(IBattleStrategy):
 
         # To try to remove a stance if needed
         picked_stance_removal_ids = sorted(
-            [i for i, card in enumerate(picked_cards) if find(vio.freyr_1, card.card_image)],
+            np.where([find(vio.freyr_1, card.card_image) for card in picked_cards])[0],
             key=lambda idx: card_ranks[idx],
         )
 
-        if its_rules_time := find(vio.dk_empty_slot, screenshot):
+        if rules_time := find(vio.dk_empty_slot, screenshot):
             print("Let's try to follow the rules!")
 
             rules_window = crop_region(screenshot, Coordinates.get_coordinates("rules_window_region"))
@@ -72,25 +63,22 @@ class DemonKingHardBattleStrategy(IBattleStrategy):
             third_rule_window = rules_window[:, 2 * rules_width :, ...]
 
             # Evaluate all windows
-            color_rules: list[CardColors] = []
+            rule_levels = []
             for rule_window in (first_rule_window, second_rule_window, third_rule_window):
-                rule, _ = self._best_rule_for_window(rule_window)
-                color_rules.append(rule)
+                level, _ = self._best_rule_for_window(rule_window)
+                rule_levels.append(level)
 
-            print(f"Detected color rules: {[rule.name for rule in color_rules]}")
+            print("Detected rule levels:", rule_levels)
 
             if card_turn <= 2:
-                target_rule = color_rules[card_turn]
+                target_card_rank = CardRanks(rule_levels[card_turn] - 1)
+                print("Current rule?", target_card_rank)
 
-                # Retrieve all images corresponding to the target_rule color from the given color_cards_dict
-                potential_cards = color_cards_dict[target_rule]
-                # Try to find a card corresponding to this color
-                for idx, card in enumerate(hand_of_cards):
-                    for pot_card in potential_cards:
-                        best_rect = TemplateMatchingStrategy.find(card.card_image, pot_card)
-                        if best_rect is not None and best_rect.size > 0:
-                            return idx
-
+                candidates = np.where([card.card_rank == target_card_rank for card in hand_of_cards])[0]
+                # Let's first reorder the candidates such that we avoid picking a Freyr stance card
+                candidates = self._reorder_freyr_ids(hand_of_cards, candidates)
+                if len(candidates):
+                    return candidates[-1]
             else:
                 print(f"[WARN] Card turn is {card_turn}>2, wierdly, so we cannot follow any rule.")
 
@@ -120,7 +108,7 @@ class DemonKingHardBattleStrategy(IBattleStrategy):
 
         else:
             # Let's disable all Freyr stance-cancel cards
-            freyr_ids = [i for i, card in enumerate(hand_of_cards) if find(vio.freyr_1, card.card_image)]
+            freyr_ids = np.where([find(vio.freyr_1, card.card_image) for card in hand_of_cards])[0]
             if len(freyr_ids):
                 print("Saving Freyr stance cancel cards, just in case!")
             for idx in freyr_ids:
@@ -130,7 +118,7 @@ class DemonKingHardBattleStrategy(IBattleStrategy):
         # Play a Skuld stance if we can
         stance_active = find(vio.stance_counter, screenshot)
         stance_card_ids = sorted(
-            [i for i, card in enumerate(hand_of_cards) if find(vio.skuld_stance, card.card_image)],
+            np.where([find(vio.skuld_stance, card.card_image) for card in hand_of_cards])[0],
             key=lambda idx: card_ranks[idx],
         )
         if len(stance_card_ids) and not stance_active:
@@ -141,23 +129,23 @@ class DemonKingHardBattleStrategy(IBattleStrategy):
             for idx in stance_card_ids:
                 hand_of_cards[idx].card_type = CardTypes.DISABLED
 
-        # # Play a Skuld attack if possible
-        # skuld_att_ids = sorted(
-        #     np.where([find(vio.skuld_st, card.card_image) for card in hand_of_cards])[0],
-        #     key=lambda idx: card_ranks[idx],
-        # )
-        # if len(skuld_att_ids):
-        #     return skuld_att_ids[-1]
+        # Play a Skuld attack if possible
+        skuld_att_ids = sorted(
+            np.where([find(vio.skuld_st, card.card_image) for card in hand_of_cards])[0],
+            key=lambda idx: card_ranks[idx],
+        )
+        if len(skuld_att_ids):
+            return skuld_att_ids[-1]
 
         # Otherwise, we cannot kill it in 1 turns, so let's default to regular strategy
         return SmarterBattleStrategy.get_next_card_index(hand_of_cards, picked_cards)
 
-    def _best_rule_for_window(self, window: np.ndarray) -> tuple[CardColors, float]:
+    def _best_rule_for_window(self, window: np.ndarray) -> tuple[int, float]:
         """Return the best (rule_level, confidence) for one rule window."""
         results = {
-            CardColors(1): vio.strength_rule.find_with_confidence(window, threshold=0.8),
-            CardColors(2): vio.hp_rule.find_with_confidence(window, threshold=0.8),
-            CardColors(3): vio.speed_rule.find_with_confidence(window, threshold=0.8),
+            1: vio.lvl_1_rule.find_with_confidence(window, threshold=0.8),
+            2: vio.lvl_2_rule.find_with_confidence(window, threshold=0.8),
+            3: vio.lvl_3_rule.find_with_confidence(window, threshold=0.8),
         }
 
         # Pick the rule with the highest confidence
@@ -169,7 +157,7 @@ class DemonKingHardBattleStrategy(IBattleStrategy):
         """Reorder the Freyr stance cancel ids such that they are at the beginning of the list"""
 
         # Add the buff removal ID to the beginning of the list
-        freyr_ids = [i for i, idx in enumerate(list_of_ids) if find(vio.freyr_1, hand_of_cards[idx].card_image)]
+        freyr_ids = np.where([find(vio.freyr_1, hand_of_cards[idx].card_image) for idx in list_of_ids])[0]
         for idx in freyr_ids:
             # print("Setting lowest priority to buff removal card")
             list_of_ids = np.concatenate(([list_of_ids[idx]], np.delete(list_of_ids, idx)))
