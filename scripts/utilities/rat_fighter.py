@@ -1,5 +1,6 @@
 import time
 
+import numpy as np
 import utilities.vision_images as vio
 from utilities.coordinates import Coordinates
 from utilities.general_fighter_interface import FightingStates, IFighter

@@ -1,5 +1,6 @@
 import time
 
+import numpy as np
 import utilities.vision_images as vio
 from utilities.card_data import Card
 from utilities.coordinates import Coordinates
