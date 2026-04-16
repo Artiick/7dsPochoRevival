@@ -460,6 +460,7 @@ FARMER_IMAGES = {
     "Guild Boss Farmer": "guild_boss_farmer.jpg",
     "Demon King Farmer": "dk_farmer.jpg",
     "Boss Battle Farmer": "boss_battle_farmer.png",
+    "Gold Farmer": "gold_farmer.jpg",
 }
 
 # Farmer script definitions (argument structure)
@@ -594,6 +595,13 @@ FARMERS = [
                 "default": "hell",
             },
             {"name": "--clears", "label": "Clears", "type": "text", "default": "20"},
+        ],
+    },
+    {
+        "name": "Gold Farmer",
+        "script": "GoldFarmer.py",
+        "args": [
+            {"name": "--do-dailies", "label": "Do Dailies (2am PST)", "type": "checkbox", "default": True},
         ],
     },
     {
@@ -1059,6 +1067,7 @@ PASSWORD_CLI_SCRIPTS = frozenset(
         "DogsFloor4Farmer.py",
         "DemonFarmer.py",
         "GuildBossFarmer.py",
+        "GoldFarmer.py",
         "RatFarmer.py",
         "SnakeFarmer.py",
     }

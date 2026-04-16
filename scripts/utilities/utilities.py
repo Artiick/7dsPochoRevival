@@ -211,12 +211,27 @@ def draw_regions(image: np.ndarray, *regions: tuple[int, int, int, int], line_co
     return draw_rectangles(image.copy(), rects, line_color=line_color)
 
 
-def screenshot_testing(screenshot: np.ndarray, vision_image: Vision, threshold=0.7, cv_method=cv2.TM_CCOEFF_NORMED):
+def screenshot_testing(
+    screenshot: np.ndarray,
+    vision_image: Vision,
+    threshold=0.7,
+    cv_method=cv2.TM_CCOEFF_NORMED,
+    best_only: bool = False,
+):
     """Debugging function that displays a screenshot and the patterns matched for a specific `Vision` image"""
 
     # cv2.imshow("screenshot", screenshot)
 
-    # rectangle = vision_image.find(screenshot, threshold=threshold)
+    if best_only:
+        rectangle = vision_image.find(screenshot, threshold=threshold, method=cv_method)
+        if rectangle is None or not rectangle.size:
+            print("No rectangles found!")
+            return
+        new_image = draw_rectangles(screenshot, rectangle)
+        cv2.imshow("Rectangles", new_image)
+        cv2.waitKey(0)
+        return
+
     rectangles, _ = vision_image.find_all_rectangles(screenshot, threshold=threshold, method=cv_method)
     if rectangles.size:
         new_image = draw_rectangles(screenshot, rectangles)
