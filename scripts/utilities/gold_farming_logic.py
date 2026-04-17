@@ -71,6 +71,11 @@ class GoldFarmer(IFarmer):
         """Fighting!"""
         screenshot, window_location = capture_window()
 
+        if self.check_for_dailies():
+            self.current_state = States.SETTING_UP_CHECKIN
+            return
+        self.maybe_reset_daily_checkin_flag()
+
         # We may need to restore stamina to keep the run going.
         if find_and_click(vio.restore_stamina, screenshot, window_location):
             IFarmer.stamina_pots += 1
@@ -81,16 +86,13 @@ class GoldFarmer(IFarmer):
 
         find_and_click(vio.startbutton, screenshot, window_location)
 
-        if self.check_for_dailies():
-            press_key("esc")
-            self.current_state = States.SETTING_UP_CHECKIN
-            return
-
-        self.maybe_reset_daily_checkin_flag()
-
     def setting_up_checkin_state(self):
         """Setting up checkin!"""
         screenshot, window_location = capture_window()
+
+        if find(vio.pause_fight, screenshot):
+            press_key("esc")
+            return
 
         if find(vio.tavern, screenshot):
             self.current_state = GlobalStates.DAILY_RESET
