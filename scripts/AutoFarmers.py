@@ -70,9 +70,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-# Import the window resize function
-from utilities.capture_window import capture_window, resize_7ds_window
-from utilities.utilities import (
+from utilities.app_config import (
     APP_CONFIG_DEFAULTS,
     config,
     get_pause_flag_path,
@@ -881,6 +879,8 @@ class FarmerController(QObject):
         self._append_output("\nOutput cleared.\n")
 
     def resize_window(self):
+        from utilities.capture_window import capture_window, resize_7ds_window
+
         if resize_7ds_window(width=538, height=921):
             try:
                 screenshot, _ = capture_window()
@@ -2442,6 +2442,9 @@ class ListView(QWidget):
         self._controllers = controllers
         self._farmer_tabs: dict = {}
         self._list_rows: dict = {}  # farmer_name → row index in QListWidget
+        self._slot_built: list[bool] = []  # parallel to self._stack indices; False = placeholder
+        self._row_to_farmer: dict = {}  # stack/row index → farmer name (rows 1+ only)
+        self._about_tab: AboutTab | None = None
         self._init_ui()
 
     def _init_ui(self):
@@ -2475,6 +2478,7 @@ class ListView(QWidget):
             item = QListWidgetItem("  " + farmer["name"])
             self._list.addItem(item)
             self._list_rows[farmer["name"]] = i + 1
+            self._row_to_farmer[i + 1] = farmer["name"]
 
         self._list.currentRowChanged.connect(self._on_row_changed)
         sidebar_lay.addWidget(self._list)
@@ -2484,32 +2488,64 @@ class ListView(QWidget):
         self._stack = QStackedWidget()
         self._stack.setStyleSheet(f"background: {C['bg']};")
 
-        # Index 0: About
-        self._about_tab = AboutTab()
-        about_scroll = QScrollArea()
-        about_scroll.setWidgetResizable(True)
-        about_scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {C['bg']}; }}")
-        about_scroll.setWidget(self._about_tab)
-        self._stack.addWidget(about_scroll)
+        # Empty placeholder per row (index 0 = About, indices 1+ = farmers).
+        # Real widgets are injected lazily on first selection; this keeps stack
+        # indices 1:1 with sidebar rows without paying the build cost up front.
+        for _ in range(1 + len(self._farmers)):
+            self._stack.addWidget(self._make_slot())
+            self._slot_built.append(False)
 
-        # Indices 1+: FarmerTabs
+        # Sidebar dot indicator must update for every farmer, even before its
+        # tab is built — so the running_changed wiring stays eager.
         for farmer in self._farmers:
             controller = self._controllers[farmer["name"]]
             controller.running_changed.connect(
                 lambda running, pid, n=farmer["name"]: self._on_running_changed(n, running)
             )
-            tab = FarmerTab(farmer, controller)
-            self._stack.addWidget(tab)
-            self._farmer_tabs[farmer["name"]] = tab
             self._on_running_changed(farmer["name"], controller.is_running)
 
         layout.addWidget(self._stack, 1)
 
+        # Visually select row 0 (About) without triggering the lazy build now;
+        # defer the actual AboutTab construction to the next event-loop tick so
+        # the window paints first, then the About content fills in.
+        self._list.blockSignals(True)
         self._list.setCurrentRow(0)
+        self._list.blockSignals(False)
+        QTimer.singleShot(0, lambda: self._on_row_changed(0))
+
+    @staticmethod
+    def _make_slot() -> QWidget:
+        slot = QWidget()
+        lay = QVBoxLayout(slot)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        return slot
 
     def _on_row_changed(self, row):
-        if row >= 0:
-            self._stack.setCurrentIndex(row)
+        if row < 0:
+            return
+        if not self._slot_built[row]:
+            self._build_slot(row)
+            self._slot_built[row] = True
+        self._stack.setCurrentIndex(row)
+
+    def _build_slot(self, row: int) -> None:
+        slot = self._stack.widget(row)
+        if row == 0:
+            self._about_tab = AboutTab()
+            about_scroll = QScrollArea()
+            about_scroll.setWidgetResizable(True)
+            about_scroll.setStyleSheet(f"QScrollArea {{ border: none; background: {C['bg']}; }}")
+            about_scroll.setWidget(self._about_tab)
+            slot.layout().addWidget(about_scroll)
+            return
+
+        farmer_name = self._row_to_farmer[row]
+        farmer = next(f for f in self._farmers if f["name"] == farmer_name)
+        tab = FarmerTab(farmer, self._controllers[farmer_name])
+        self._farmer_tabs[farmer_name] = tab
+        slot.layout().addWidget(tab)
 
     def _on_running_changed(self, name: str, running: bool):
         row = self._list_rows.get(name)
@@ -2567,8 +2603,11 @@ class MainWindow(QMainWindow):
         self._detail_views: dict = {}
         self._farmer_by_name = {f["name"]: f for f in FARMERS}
 
-        self.settings_tab = SettingsTab()
-        self.about_tab = AboutTab(restart_safe_supplier=lambda: not self._any_farmer_running())
+        self._settings_tab: SettingsTab | None = None
+        self._about_tab: AboutTab | None = None
+        self._settings_wrapper: QWidget | None = None
+        self._about_wrapper: QWidget | None = None
+
         self._controllers = {
             farmer["name"]: FarmerController(
                 farmer,
@@ -2636,18 +2675,39 @@ class MainWindow(QMainWindow):
 
         self.list_view = ListView(FARMERS, self._controllers)
 
-        self.about_wrapper = self._wrap_with_back_bar(self.about_tab, "About")
-        self.settings_wrapper = self._wrap_with_back_bar(self.settings_tab, "Settings")
-
         self.stack.addWidget(self.grid_view)
         self.stack.addWidget(self.list_view)
-        self.stack.addWidget(self.about_wrapper)
-        self.stack.addWidget(self.settings_wrapper)
 
         root.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
         self.stack.setCurrentWidget(self.list_view)
+
+    @property
+    def settings_tab(self) -> "SettingsTab":
+        if self._settings_tab is None:
+            self._settings_tab = SettingsTab()
+        return self._settings_tab
+
+    @property
+    def about_tab(self) -> "AboutTab":
+        if self._about_tab is None:
+            self._about_tab = AboutTab(restart_safe_supplier=lambda: not self._any_farmer_running())
+        return self._about_tab
+
+    @property
+    def settings_wrapper(self) -> QWidget:
+        if self._settings_wrapper is None:
+            self._settings_wrapper = self._wrap_with_back_bar(self.settings_tab, "Settings")
+            self.stack.addWidget(self._settings_wrapper)
+        return self._settings_wrapper
+
+    @property
+    def about_wrapper(self) -> QWidget:
+        if self._about_wrapper is None:
+            self._about_wrapper = self._wrap_with_back_bar(self.about_tab, "About")
+            self.stack.addWidget(self._about_wrapper)
+        return self._about_wrapper
 
     def _wrap_with_back_bar(self, page_widget: QWidget, title: str = "") -> QWidget:
         wrapper = QWidget()

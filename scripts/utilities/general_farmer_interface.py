@@ -12,13 +12,13 @@ from utilities.coordinates import Coordinates
 from utilities.daily_farming_logic import DailyFarmer
 from utilities.daily_farming_logic import States as DailyFarmerStates
 from utilities.general_fighter_interface import IFighter
+from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.utilities import (
     click_and_sleep,
     close_game,
     drag_im,
     find,
     find_and_click,
-    get_minutes_to_wait_before_login,
     press_key,
     type_word,
 )

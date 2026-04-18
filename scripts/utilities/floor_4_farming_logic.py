@@ -18,13 +18,13 @@ from utilities.general_farmer_interface import (
 )
 from utilities.general_farmer_interface import States as GlobalStates
 from utilities.logging_utils import LoggerWrapper
+from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.utilities import (
     capture_window,
     check_for_reconnect,
     drag_im,
     find,
     find_and_click,
-    get_minutes_to_wait_before_login,
 )
 
 logger = LoggerWrapper("Floor4Logger", log_file="floor_4.log")

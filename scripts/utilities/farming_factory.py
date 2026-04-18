@@ -2,15 +2,11 @@ import sys
 import threading
 import time
 
+from utilities.app_config import click_tracker, config
 from utilities.capture_window import capture_window
 from utilities.fighting_strategies import IBattleStrategy
 from utilities.general_farmer_interface import IFarmer
-from utilities.utilities import (
-    click_tracker,
-    config,
-    re_open_7ds_window,
-    send_push_notification,
-)
+from utilities.utilities import re_open_7ds_window, send_push_notification
 
 _POLL_INTERVAL_SECONDS = 2.0
 _REPEATED_CLICK_THRESHOLD = 30

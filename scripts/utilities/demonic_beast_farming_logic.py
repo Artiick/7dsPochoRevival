@@ -13,6 +13,7 @@ from utilities.general_farmer_interface import (
 )
 from utilities.general_farmer_interface import States as GlobalStates
 from utilities.logging_utils import LoggerWrapper
+from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.utilities import (
     capture_window,
     check_for_reconnect,
@@ -21,7 +22,6 @@ from utilities.utilities import (
     find,
     find_and_click,
     find_floor_coordinates,
-    get_minutes_to_wait_before_login,
     screenshot_testing,
 )
 

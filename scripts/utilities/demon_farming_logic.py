@@ -12,6 +12,7 @@ from utilities.general_fighter_interface import IBattleStrategy, IFighter
 from utilities.indura_fighter import InduraFighter
 from utilities.indura_fighting_strategies import InduraBattleStrategy
 from utilities.logging_utils import LoggerWrapper
+from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.utilities import (
     capture_window,
     check_for_reconnect,
@@ -20,7 +21,6 @@ from utilities.utilities import (
     display_image,
     find,
     find_and_click,
-    get_minutes_to_wait_before_login,
 )
 from utilities.vision import Vision
 

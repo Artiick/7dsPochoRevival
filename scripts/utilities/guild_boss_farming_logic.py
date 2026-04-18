@@ -8,13 +8,13 @@ from utilities.general_farmer_interface import CHECK_IN_HOUR, IFarmer
 from utilities.general_farmer_interface import States as GlobalStates
 from utilities.general_fighter_interface import IBattleStrategy
 from utilities.logging_utils import LoggerWrapper
+from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.utilities import (
     capture_window,
     check_for_reconnect,
     click_im,
     find,
     find_and_click,
-    get_minutes_to_wait_before_login,
     press_key,
 )
 from utilities.vision import Vision

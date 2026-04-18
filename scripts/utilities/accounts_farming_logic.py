@@ -14,6 +14,7 @@ from utilities.daily_farming_logic import DailyFarmer
 from utilities.daily_farming_logic import States as DailyFarmerStates
 from utilities.general_fighter_interface import IBattleStrategy
 from utilities.logging_utils import LoggerWrapper
+from utilities.app_config import load_yaml_config
 from utilities.utilities import (
     capture_window,
     click_and_sleep,
@@ -22,7 +23,6 @@ from utilities.utilities import (
     crop_image,
     find,
     find_and_click,
-    load_yaml_config,
     press_key,
     type_word,
 )
