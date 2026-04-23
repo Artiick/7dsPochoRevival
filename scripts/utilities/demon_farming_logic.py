@@ -5,6 +5,7 @@ from enum import Enum
 import numpy as np
 import pyautogui as pyautogui
 import utilities.vision_images as vio
+from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.coordinates import Coordinates
 from utilities.general_farmer_interface import CHECK_IN_HOUR, IFarmer
 from utilities.general_farmer_interface import States as GlobalStates
@@ -12,7 +13,6 @@ from utilities.general_fighter_interface import IBattleStrategy, IFighter
 from utilities.indura_fighter import InduraFighter
 from utilities.indura_fighting_strategies import InduraBattleStrategy
 from utilities.logging_utils import LoggerWrapper
-from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.utilities import (
     capture_window,
     check_for_reconnect,
@@ -143,6 +143,11 @@ class IDemonFarmer(IFarmer):
     def going_to_demons_state(self):
         """Go to the demons page"""
         screenshot, window_location = capture_window()
+
+        if find(vio.demons_auto, screenshot):
+            # Going to the fight!
+            self.current_state = States.FIGHTING_DEMON
+            print(f"We're still fighting, we were wrong!")
 
         if find(vio.preparation_incomplete, screenshot):
             # We're waiting to click on preparation incomplete!
