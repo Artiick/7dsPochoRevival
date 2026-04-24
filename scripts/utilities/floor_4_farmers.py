@@ -28,6 +28,7 @@ class BirdFloor4Farmer(IFloor4Farmer):
         max_runs="inf",
         do_dailies=False,
         password: str | None = None,
+        extra_clears: int = 0,
     ):
 
         super().__init__(
@@ -35,8 +36,10 @@ class BirdFloor4Farmer(IFloor4Farmer):
             starting_state=starting_state,
             max_runs=max_runs,
             demonic_beast_image=vio.hraesvelgr,
+            extra_mode_source_image=vio.wind_source,
             do_dailies=do_dailies,
             password=password,
+            extra_clears=extra_clears,
         )
 
         # Using composition to decouple the main farmer logic from the actual fight.
@@ -58,6 +61,7 @@ class DeerFloor4Farmer(IFloor4Farmer):
         password: str | None = None,
         *,
         whale: bool = False,
+        extra_clears: int = 0,
     ):
 
         super().__init__(
@@ -65,8 +69,10 @@ class DeerFloor4Farmer(IFloor4Farmer):
             starting_state=starting_state,
             max_runs=max_runs,
             demonic_beast_image=vio.eikthyrnir,
+            extra_mode_source_image=vio.river_source,
             do_dailies=do_dailies,
             password=password,
+            extra_clears=extra_clears,
         )
 
         # Using composition to decouple the main farmer logic from the actual fight.
@@ -80,8 +86,11 @@ class DeerFloor4Farmer(IFloor4Farmer):
 
 class DogsFloor4Farmer(IFloor4Farmer):
 
+    whale = False
     lillia_in_team = False
     roxy_in_team = False
+    meli3k_in_team = False
+    bluegow_in_team = False
 
     def __init__(
         self,
@@ -90,6 +99,9 @@ class DogsFloor4Farmer(IFloor4Farmer):
         max_runs="inf",
         do_dailies=False,
         password: str | None = None,
+        *,
+        whale: bool = False,
+        extra_clears: int = 0,
     ):
 
         super().__init__(
@@ -97,9 +109,17 @@ class DogsFloor4Farmer(IFloor4Farmer):
             starting_state=starting_state,
             max_runs=max_runs,
             demonic_beast_image=vio.skollandhati,
+            extra_mode_source_image=vio.twilight_source,
             do_dailies=do_dailies,
             password=password,
+            extra_clears=extra_clears,
         )
+
+        DogsFloor4Farmer.whale = whale
+        DogsFloor4Farmer.lillia_in_team = False
+        DogsFloor4Farmer.roxy_in_team = False
+        DogsFloor4Farmer.meli3k_in_team = False
+        DogsFloor4Farmer.bluegow_in_team = False
 
         self.fighter: IFighter = DogsFloor4Fighter(
             battle_strategy=battle_strategy,
@@ -107,6 +127,17 @@ class DogsFloor4Farmer(IFloor4Farmer):
         )
 
     def on_ready_to_fight_before_start(self, screenshot):
+        if DogsFloor4Farmer.whale:
+            if find(vio.meli3k_in_team, screenshot):
+                print("Meli3k is in the team!")
+                DogsFloor4Farmer.meli3k_in_team = True
+            if find(vio.bluegow_in_team, screenshot):
+                print("Blue Gowther is in the team!")
+                DogsFloor4Farmer.bluegow_in_team = True
+            if not DogsFloor4Farmer.meli3k_in_team or not DogsFloor4Farmer.bluegow_in_team:
+                print("Whale mode is enabled, but one or more whale team markers were not confirmed.")
+            return
+
         if find(vio.lillia_in_team, screenshot):
             print("Lillia is in the team!")
             DogsFloor4Farmer.lillia_in_team = True
@@ -116,6 +147,9 @@ class DogsFloor4Farmer(IFloor4Farmer):
 
     def get_fighter_run_kwargs(self) -> dict:
         return {
+            "whale": DogsFloor4Farmer.whale,
             "lillia_in_team": DogsFloor4Farmer.lillia_in_team,
             "roxy_in_team": DogsFloor4Farmer.roxy_in_team,
+            "meli3k_in_team": DogsFloor4Farmer.meli3k_in_team,
+            "bluegow_in_team": DogsFloor4Farmer.bluegow_in_team,
         }

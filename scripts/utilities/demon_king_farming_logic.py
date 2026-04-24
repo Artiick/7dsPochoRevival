@@ -16,6 +16,7 @@ from utilities.general_fighter_interface import IBattleStrategy, IFighter
 from utilities.logging_utils import LoggerWrapper
 from utilities.utilities import (
     capture_window,
+    check_for_reconnect,
     click_and_sleep,
     click_im,
     crop_image,
@@ -211,14 +212,30 @@ class DemonKingFarmer(IFarmer):
 
     def run(self):
 
-        self.run_state_loop(
-            {
-                States.GOING_TO_DK: self.going_to_dk_state,
-                States.OPEN_DK: self.open_dk_state,
-                States.PREPARE_FIGHT: self.prepare_fight_state,
-                States.FIGHTING: self.fighting_state,
-                States.EXIT_FARMER: self.exit_farmer_state,
-            },
-            login_return_state=States.GOING_TO_DK,
-            sleep_seconds=0.5,
-        )
+        while True:
+            # Try to reconnect first
+            if not (success := check_for_reconnect()):
+                # We had to restart the game! Let's log back in immediately
+                print("Let's try to log back in immediately...")
+                IFarmer.first_login = True
+
+            # Check if we need to log in again!
+            self.check_for_login_state()
+
+            if self.current_state == States.GOING_TO_DK:
+                self.going_to_dk_state()
+
+            elif self.current_state == States.OPEN_DK:
+                self.open_dk_state()
+
+            elif self.current_state == States.PREPARE_FIGHT:
+                self.prepare_fight_state()
+
+            elif self.current_state == States.FIGHTING:
+                self.fighting_state()
+
+            elif self.current_state == States.EXIT_FARMER:
+                self.exit_farmer_state()
+
+            # We need the loop to run very fast
+            time.sleep(0.5)

@@ -28,12 +28,16 @@ class DogsFighter(IFighter):
 
     # Subclasses (e.g. Floor 4) may set False to skip auto-clicking Escalin talent on phase 3 entry.
     activate_phase3_escalin_talent = True
+    TARGET_CONFIRM_RETRIES = 3
+    TARGET_CONFIRM_TIMEOUT_SECONDS = 0.8
+    TARGET_CONFIRM_POLL_SECONDS = 0.08
 
     def __init__(self, battle_strategy: IBattleStrategy, callback: Callable | None = None):
         super().__init__(battle_strategy=battle_strategy, callback=callback)
 
         # Reset the current phase to -1
         IFighter.current_phase = -1
+        self.target_selected_phase = None
 
     def fighting_state(self):
 
@@ -129,7 +133,8 @@ class DogsFighter(IFighter):
         # 1. Read the phase we're in
         # 2. Make sure to click on the correct dog (right/left) depending on the phase
         # empty_card_slots = self.count_empty_card_slots(screenshot)
-        self._identify_current_phase()
+        if not self._identify_current_phase():
+            return
 
         # Then play the cards
         self.play_cards()
@@ -139,25 +144,74 @@ class DogsFighter(IFighter):
         screenshot, window_location = capture_window()
         if find(vio.phase_1, screenshot, threshold=0.8) and IFighter.current_phase != 1:
             if (available_card_slots := DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)) > 1:
-                # Click on light dog -- This is a hack!
                 IFighter.current_phase = 1
-                print("Clicking on light dog, because current phase:", IFighter.current_phase)
-                click_im(Coordinates.get_coordinates("light_dog"), window_location)
+                self.target_selected_phase = None
         elif find(vio.phase_2, screenshot, threshold=0.8) and IFighter.current_phase != 2:
-            # Click on dark dog
             IFighter.current_phase = 2
-            print("Clicking on dark dog, because current phase:", IFighter.current_phase)
-            click_im(Coordinates.get_coordinates("dark_dog"), window_location)
+            self.target_selected_phase = None
         elif find(vio.phase_3_dogs, screenshot, threshold=0.8) and IFighter.current_phase != 3:
-            # Click on dark dog
             IFighter.current_phase = 3
-            print("Clicking on dark dog, because current phase:", IFighter.current_phase)
-            click_im(Coordinates.get_coordinates("dark_dog"), window_location)
-            if type(self).activate_phase3_escalin_talent and find_and_click(
-                vio.talent_escalin, screenshot, window_location, threshold=0.6
-            ):
-                print("Phase 3 entry: activating talent_escalin")
-                time.sleep(2.5)
+            self.target_selected_phase = None
+
+        if IFighter.current_phase == 1 and self.target_selected_phase != 1:
+            if not self._ensure_dogs_target_selected("right", "light_dog", window_location):
+                return False
+            self.target_selected_phase = 1
+        elif IFighter.current_phase in {2, 3} and self.target_selected_phase != IFighter.current_phase:
+            if not self._ensure_dogs_target_selected("left", "dark_dog", window_location):
+                return False
+            self.target_selected_phase = IFighter.current_phase
+            if IFighter.current_phase == 3 and type(self).activate_phase3_escalin_talent:
+                screenshot, window_location = capture_window()
+                if find_and_click(vio.talent_escalin, screenshot, window_location, threshold=0.6):
+                    print("Phase 3 entry: activating talent_escalin")
+                    time.sleep(2.5)
+
+        return True
+
+    @staticmethod
+    def _get_dogs_selected_target_sides(screenshot) -> set[str]:
+        selected_sides = set()
+        if find(vio.dogs_left_target_sel, screenshot, threshold=0.8):
+            selected_sides.add("left")
+        if find(vio.dogs_right_target_sel, screenshot, threshold=0.8) or find(
+            vio.dogs_right_target_sel2,
+            screenshot,
+            threshold=0.8,
+        ):
+            selected_sides.add("right")
+        return selected_sides
+
+    def _wait_for_dogs_target_selection(self, target_side: str) -> bool:
+        deadline = time.time() + self.TARGET_CONFIRM_TIMEOUT_SECONDS
+        while time.time() < deadline:
+            screenshot, _ = capture_window()
+            if target_side in self._get_dogs_selected_target_sides(screenshot):
+                return True
+            time.sleep(self.TARGET_CONFIRM_POLL_SECONDS)
+        return False
+
+    def _ensure_dogs_target_selected(self, target_side: str, coordinate_key: str, window_location) -> bool:
+        screenshot, _ = capture_window()
+        if target_side in self._get_dogs_selected_target_sides(screenshot):
+            print(f"Dogs target verification: {target_side} dog is already selected.")
+            return True
+
+        for attempt in range(1, self.TARGET_CONFIRM_RETRIES + 1):
+            print(
+                f"Dogs targeting: clicking the {target_side} dog for phase {IFighter.current_phase} "
+                f"(attempt {attempt}/{self.TARGET_CONFIRM_RETRIES})."
+            )
+            click_im(Coordinates.get_coordinates(coordinate_key), window_location)
+            if self._wait_for_dogs_target_selection(target_side):
+                print(f"Dogs target verification: confirmed {target_side} dog selection.")
+                return True
+
+        print(
+            f"Dogs target verification failed: could not confirm {target_side} dog selection "
+            "after repeated clicks. Waiting for the next loop instead of firing cards blind."
+        )
+        return False
 
     def fight_complete_state(self):
 

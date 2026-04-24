@@ -1,7 +1,10 @@
-"""Dogs Floor 4 fighter: first MY_TURN waits for talent_escalin (no empty-slot shortcut until then)."""
+"""Dogs Floor 4 fighter: first MY_TURN waits for the Dogs Escalin talent marker."""
 
+import time
 from collections.abc import Callable
+from numbers import Integral
 
+from utilities.card_data import Card
 import utilities.vision_images as vio
 from utilities.dogs_fighter import DogsFighter
 from utilities.dogs_floor4_fighting_strategies import DogsFloor4BattleStrategy
@@ -11,6 +14,9 @@ from utilities.utilities import capture_window, find
 
 class DogsFloor4Fighter(DogsFighter):
     battle_strategy: DogsFloor4BattleStrategy
+    SLOT_STALL_RETRY_THRESHOLD = 8
+    SINGLE_AUTO_MERGE_WAIT_SECONDS = 0.6
+    DOUBLE_AUTO_MERGE_WAIT_SECONDS = 1.1
 
     activate_phase3_escalin_talent = False
     _f4_first_my_turn_pending = True
@@ -18,10 +24,15 @@ class DogsFloor4Fighter(DogsFighter):
 
     def __init__(self, battle_strategy: type[DogsFloor4BattleStrategy], callback: Callable | None = None):
         super().__init__(battle_strategy=battle_strategy, callback=callback)
+        self._reset_slot_stall_guard()
+
+    @staticmethod
+    def _dogs_talent_marker_visible(screenshot) -> bool:
+        return find(vio.dogs_escalin_talent, screenshot, threshold=0.75)
 
     def _try_enter_my_turn(self, screenshot) -> bool:
         if DogsFloor4Fighter._f4_first_my_turn_pending:
-            if not find(vio.talent_escalin, screenshot, threshold=0.7):
+            if not self._dogs_talent_marker_visible(screenshot):
                 # Do not use empty-slot detection yet; wait until the talent button is visible.
                 return False
             available = DogsFighter.count_empty_card_slots(screenshot, threshold=0.8)
@@ -32,7 +43,7 @@ class DogsFloor4Fighter(DogsFighter):
                 self.current_state = FightingStates.EXIT_FIGHT
                 return True
             self.available_card_slots = available
-            print(f"MY TURN (Floor 4 first turn: talent_escalin), selecting {available} cards...")
+            print(f"MY TURN (Floor 4 first turn: Dogs Escalin talent), selecting {available} cards...")
             self.current_state = FightingStates.MY_TURN
             DogsFloor4Fighter._f4_first_my_turn_pending = False
             return True
@@ -66,14 +77,15 @@ class DogsFloor4Fighter(DogsFighter):
         self._try_increment_fight_turn_from_start_signals(
             screenshot,
             empty_card_slots=empty,
-            talent_log="Turn start detected from talent_escalin visibility.",
+            talent_log="Turn start detected from Dogs Escalin talent visibility.",
             slots_log_prefix="Turn start detected from empty card slots",
         )
 
     def my_turn_state(self):
-        self._identify_current_phase()
+        if not self._identify_current_phase():
+            return
         self._maybe_increment_fight_turn_at_turn_start()
-        if self._should_exit_before_play_cards():
+        if self._should_exit_before_play_cards() or self._consume_requested_reset_if_any():
             return
         self.play_cards()
 
@@ -94,23 +106,89 @@ class DogsFloor4Fighter(DogsFighter):
         if empty_card_slots > self.available_card_slots:
             self.available_card_slots = empty_card_slots
 
-        if self._should_exit_before_play_cards():
+        slot_index = max(0, self.available_card_slots - empty_card_slots)
+        slot_already_used = (
+            0 <= slot_index < len(self.picked_cards) and self.picked_cards[slot_index].card_image is not None
+        )
+        if slot_already_used:
+            if slot_index >= max(0, self.available_card_slots - 1):
+                self._reset_slot_stall_guard()
+                print(
+                    "Dogs Floor 4 turn-end guard: the last slot was already used, "
+                    "but empty-slot detection still reports one opening. Treating the turn as complete."
+                )
+                return self.finish_turn()
+            repeated_stall = (
+                self._stalled_slot_index == slot_index and self._stalled_slot_empty_slots == empty_card_slots
+            )
+            self._stalled_slot_index = slot_index
+            self._stalled_slot_empty_slots = empty_card_slots
+            self._stalled_slot_repeats = self._stalled_slot_repeats + 1 if repeated_stall else 1
+            if self._stalled_slot_repeats >= self.SLOT_STALL_RETRY_THRESHOLD:
+                print(
+                    "Dogs Floor 4 stall recovery: slot",
+                    slot_index,
+                    "never cleared after",
+                    self._stalled_slot_repeats,
+                    "checks, so re-arming that action and trying again.",
+                )
+                self.picked_cards[slot_index] = Card()
+                self._reset_slot_stall_guard()
+                slot_already_used = False
+            else:
+                print(
+                    "Dogs Floor 4 slot guard: slot",
+                    slot_index,
+                    "was already consumed, so waiting for the hand to settle before sending another card.",
+                )
+                return
+        else:
+            self._reset_slot_stall_guard()
+
+        if self._should_exit_before_play_cards() or self._consume_requested_reset_if_any():
             return
 
-        return super().play_cards(**kwargs)
+        is_last_action_slot = slot_index >= max(0, self.available_card_slots - 1)
+        result = super().play_cards(**kwargs)
+        self._reset_slot_stall_guard()
+        if (
+            result is None
+            and is_last_action_slot
+            and self.current_state == FightingStates.MY_TURN
+        ):
+            print(
+                "Dogs Floor 4 turn-end guard: the last action slot was already sent, "
+                "so finishing the turn without waiting for slot vision to catch up."
+            )
+            return self.finish_turn()
+
+        return result
 
     def _should_exit_before_play_cards(self) -> bool:
         is_turn_start = self.picked_cards[0].card_image is None
         fight_turn = self.battle_strategy.fight_turn
-        if IFighter.current_phase == 3:
-            print(f"Phase 3 turn {fight_turn}")
-        if IFighter.current_phase != 3 or not is_turn_start or fight_turn < 10:
+        if IFighter.current_phase in {2, 3}:
+            print(f"Phase {IFighter.current_phase} turn {fight_turn}")
+        if IFighter.current_phase not in {2, 3} or not is_turn_start or fight_turn < 10:
             return False
 
         print(
-            "Phase 3 reached the turn limit; manually forfeiting before playing cards.",
+            f"Phase {IFighter.current_phase} reached the turn limit; manually forfeiting before playing cards.",
             f"fight_turn={fight_turn}",
         )
+        self.current_state = FightingStates.EXIT_FIGHT
+        return True
+
+    def _consume_requested_reset_if_any(self) -> bool:
+        consume_reset = getattr(self.battle_strategy, "consume_requested_reset_reason", None)
+        if not callable(consume_reset):
+            return False
+
+        reset_reason = consume_reset()
+        if not reset_reason:
+            return False
+
+        print(reset_reason)
         self.current_state = FightingStates.EXIT_FIGHT
         return True
 
@@ -133,7 +211,7 @@ class DogsFloor4Fighter(DogsFighter):
         self._try_increment_fight_turn_from_start_signals(
             screenshot,
             empty_card_slots=empty_card_slots,
-            talent_log="Late turn-start detection from talent_escalin visibility.",
+            talent_log="Late turn-start detection from Dogs Escalin talent visibility.",
             slots_log_prefix="Late turn-start detection from empty card slots",
         )
 
@@ -150,7 +228,7 @@ class DogsFloor4Fighter(DogsFighter):
         Talent visibility is treated as definitive. When talent is absent, we
         fall back to the normal 3+/4-slot opening rule.
         """
-        if find(vio.talent_escalin, screenshot, threshold=0.7):
+        if self._dogs_talent_marker_visible(screenshot):
             print(talent_log)
             self.battle_strategy.increment_fight_turn()
             DogsFloor4Fighter._fight_turn_incremented_at_turn_start = True
@@ -171,9 +249,43 @@ class DogsFloor4Fighter(DogsFighter):
         # Floor 4 turn counting is start-only for every phase. We deliberately avoid end-of-turn
         # increments so short turns (for example, 1-slot cleanup turns) do not create confusing jumps.
         DogsFloor4Fighter._fight_turn_incremented_at_turn_start = False
+        self._reset_slot_stall_guard()
         self._reset_instance_variables()
         print("Finished my turn!")
         return 1
+
+    def _play_card(self, list_of_cards, index, window_location, screenshot=None):
+        expected_auto_merges = 0
+        estimate_auto_merge_count = getattr(self.battle_strategy, "estimate_auto_merge_count_after_play", None)
+        if isinstance(index, Integral) and callable(estimate_auto_merge_count):
+            expected_auto_merges = estimate_auto_merge_count(list_of_cards, index)
+
+        played_card = super()._play_card(
+            list_of_cards,
+            index=index,
+            window_location=window_location,
+            screenshot=screenshot,
+        )
+
+        if expected_auto_merges > 0:
+            merge_wait = (
+                self.SINGLE_AUTO_MERGE_WAIT_SECONDS
+                if expected_auto_merges == 1
+                else self.DOUBLE_AUTO_MERGE_WAIT_SECONDS
+            )
+            print(
+                "Dogs Floor 4 merge guard: this click should trigger",
+                expected_auto_merges,
+                f"auto-merge(s), so waiting {merge_wait:.2f}s before the next action.",
+            )
+            time.sleep(merge_wait)
+
+        return played_card
+
+    def _reset_slot_stall_guard(self) -> None:
+        self._stalled_slot_index = None
+        self._stalled_slot_empty_slots = None
+        self._stalled_slot_repeats = 0
 
     def _check_disabled_hand(self) -> bool:
         """If we have a disabled hand (same criteria as BirdFighter)."""
@@ -182,14 +294,31 @@ class DogsFloor4Fighter(DogsFighter):
 
     def _identify_current_phase(self):
         prev = IFighter.current_phase
-        super()._identify_current_phase()
+        identified = super()._identify_current_phase()
+        if identified is False:
+            return False
         if prev != IFighter.current_phase:
             print(f"Entered phase {IFighter.current_phase}! Resetting the Floor 4 turn counter...")
             self.battle_strategy.reset_fight_turn()
             DogsFloor4Fighter._fight_turn_incremented_at_turn_start = False
+        return True
 
-    def run(self, floor=4, lillia_in_team=False, roxy_in_team=False):
-        self.battle_strategy.reset_run_state(lillia_in_team=lillia_in_team, roxy_in_team=roxy_in_team)
+    def run(
+        self,
+        floor=4,
+        whale=False,
+        lillia_in_team=False,
+        roxy_in_team=False,
+        meli3k_in_team=False,
+        bluegow_in_team=False,
+    ):
+        self.battle_strategy.reset_run_state(
+            whale=whale,
+            lillia_in_team=lillia_in_team,
+            roxy_in_team=roxy_in_team,
+            meli3k_in_team=meli3k_in_team,
+            bluegow_in_team=bluegow_in_team,
+        )
         DogsFloor4Fighter._f4_first_my_turn_pending = True
         DogsFloor4Fighter._fight_turn_incremented_at_turn_start = False
 

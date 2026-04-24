@@ -16,6 +16,7 @@ from utilities.logging_utils import LoggerWrapper
 from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.utilities import (
     capture_window,
+    check_for_reconnect,
     crop_region,
     drag_im,
     find,
@@ -361,15 +362,44 @@ class DemonicBeastFarmer(IFarmer):
 
     def run(self):
 
-        self.run_state_loop(
-            {
-                States.GOING_TO_DB: self.going_to_db_state,
-                States.SET_PARTY: self.set_party_state,
-                States.READY_TO_FIGHT: self.proceed_to_floor_state,
-                States.FIGHTING_FLOOR: self.fighting_floor,
-                States.RESETTING_DB: self.resetting_db_state,
-                States.EXIT_FARMER: self.exit_farmer_state,
-            },
-            login_return_state=States.GOING_TO_DB,
-            sleep_seconds=0.6,
-        )
+        while True:
+
+            check_for_reconnect()
+
+            # Check if we need to log in again!
+            self.check_for_login_state()
+
+            if self.current_state == States.GOING_TO_DB:
+                self.going_to_db_state()
+
+            elif self.current_state == States.SET_PARTY:
+                self.set_party_state()
+
+            elif self.current_state == States.READY_TO_FIGHT:
+                self.proceed_to_floor_state()
+
+            elif self.current_state == States.FIGHTING_FLOOR:
+                self.fighting_floor()
+
+            elif self.current_state == States.RESETTING_DB:
+                self.resetting_db_state()
+
+            elif self.current_state == GlobalStates.DAILY_RESET:
+                self.daily_reset_state()
+
+            elif self.current_state == GlobalStates.CHECK_IN:
+                self.check_in_state()
+
+            elif self.current_state == GlobalStates.DAILIES_STATE:
+                self.dailies_state()
+
+            elif self.current_state == GlobalStates.FORTUNE_CARD:
+                self.fortune_card_state()
+
+            elif self.current_state == GlobalStates.LOGIN_SCREEN:
+                self.login_screen_state(initial_state=States.GOING_TO_DB)
+
+            elif self.current_state == States.EXIT_FARMER:
+                self.exit_farmer_state()
+
+            time.sleep(0.6)
