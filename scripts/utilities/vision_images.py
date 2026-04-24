@@ -418,22 +418,12 @@ shop = Vision("dailies\\shop.png")
 auto_clear = Vision("dailies\\auto_clear.png")
 strart_auto_clear = Vision("dailies\\start_auto_clear.png")
 quests = Vision("dailies\\quests.png")
-daily_pvp = MultiVision("dailies\\daily_pvp.png", "dailies\\daily_pvp_new.png", image_name="daily_pvp")
+daily_pvp = Vision("dailies\\daily_pvp.png")
 daily_boss_battle = Vision("dailies\\daily_boss_battle.png")
-daily_fort_solgress = MultiVision(
-    "dailies\\daily_fort_solgress.png", "dailies\\daily_fort_solgress_new.png", image_name="daily_fort_solgress"
-)
-daily_friendship_coins = MultiVision(
-    "dailies\\daily_friendship_coins.png",
-    "dailies\\daily_friendship_coins_new.png",
-    image_name="daily_friendship_coins",
-)
-daily_patrol = MultiVision("dailies\\daily_patrol.png", "dailies\\daily_patrol_new.png", image_name="daily_patrol")
-daily_vanya_ale = MultiVision(
-    "dailies\\daily_vanya_ale.png",
-    # "dailies\\daily_vanya_ale_new.png",
-    image_name="daily_vanya_ale",
-)
+daily_fort_solgress = Vision("dailies\\daily_fort_solgress.png")
+daily_friendship_coins = Vision("dailies\\daily_friendship_coins.png")
+daily_patrol = Vision("dailies\\daily_patrol.png")
+daily_vanya_ale = Vision("dailies\\daily_vanya_ale.png")
 take_all_rewards = Vision("dailies\\take_all.png")
 tasks = Vision("dailies\\tasks.png")
 daily_tasks = Vision("dailies\\daily_tasks.png")
@@ -442,6 +432,7 @@ fortune_card = Vision("dailies\\fortune_card.png")
 blue_stone = Vision("dailies\\blue_stone.png")
 search_for_a_kh = Vision("dailies\\search_for_a_kh.png")
 participate = Vision("dailies\\participate.png")
+daily_complete = Vision("dailies\\daily_complete.png")
 # Daily boss fight
 boss_battle = Vision("dailies\\boss_battle.png")
 normal_diff_boss_battle = Vision("dailies\\normal_difficulty.png")

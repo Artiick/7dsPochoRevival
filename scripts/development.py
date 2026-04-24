@@ -7,6 +7,7 @@ import utilities.vision_images as vio
 from utilities.bird_fighter import BirdFighter
 from utilities.card_data import CardTypes
 from utilities.coordinates import Coordinates
+from utilities.daily_farming_logic import DailyFarmer
 from utilities.dk_fighter import DemonKingFighter
 from utilities.dogs_fighter import DogsFighter
 from utilities.rat_fighter import RatFighter
@@ -42,7 +43,7 @@ def development():
     # determine_relative_coordinates(screenshot)
 
     # print("Screenshot shape:", screenshot.shape)
-    screenshot_testing(screenshot, vision_image=vio.pause_fight, threshold=0.7, best_only=False)
+    screenshot_testing(screenshot, vision_image=vio.daily_complete, threshold=0.7, best_only=False)
 
     # print("These many needle images found:", count_needle_image(vio.lvl_1_rule, screenshot, threshold=0.8))
 
