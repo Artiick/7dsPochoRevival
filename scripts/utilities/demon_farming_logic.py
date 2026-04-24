@@ -15,7 +15,6 @@ from utilities.indura_fighting_strategies import InduraBattleStrategy
 from utilities.logging_utils import LoggerWrapper
 from utilities.utilities import (
     capture_window,
-    check_for_reconnect,
     click_and_sleep,
     crop_region,
     display_image,
@@ -483,46 +482,20 @@ class DemonFarmer(IDemonFarmer):
         print(f"Farming demons, starting from {self.current_state}.")
         print(f"We'll be farming {[demon.image_name for demon in self.demon_roulette]} demon(s).")
 
-        while True:
-            # Try to reconnect first
-            if not (success := check_for_reconnect()):
-                # We had to restart the game! Let's log back in immediately
-                print("Let's try to log back in immediately...")
-                IFarmer.first_login = True
+        def fighting_demon_state():
+            self.fighting_demon_state()
+            time.sleep(0.2)
 
-            # Check if to change the demon to farm
-            self.rotate_demon()
+        self.run_state_loop(
+            {
+                States.GOING_TO_DEMONS: self.going_to_demons_state,
+                States.LOOKING_FOR_DEMON: self.looking_for_demon_state,
+                States.READY_TO_FIGHT: self.ready_to_fight_state,
+                States.FIGHTING_DEMON: fighting_demon_state,
+            },
+            login_return_state=States.GOING_TO_DEMONS,
+            sleep_seconds=0.01,
+        )
 
-            # Check if we need to log in again!
-            self.check_for_login_state()
-
-            if self.current_state == States.GOING_TO_DEMONS:
-                self.going_to_demons_state()
-
-            elif self.current_state == States.LOOKING_FOR_DEMON:
-                self.looking_for_demon_state()
-
-            elif self.current_state == States.READY_TO_FIGHT:
-                self.ready_to_fight_state()
-
-            elif self.current_state == GlobalStates.DAILY_RESET:
-                self.daily_reset_state()
-
-            elif self.current_state == GlobalStates.CHECK_IN:
-                self.check_in_state()
-
-            elif self.current_state == GlobalStates.DAILIES_STATE:
-                self.dailies_state()
-
-            elif self.current_state == GlobalStates.FORTUNE_CARD:
-                self.fortune_card_state()
-
-            elif self.current_state == GlobalStates.LOGIN_SCREEN:
-                self.login_screen_state(initial_state=States.GOING_TO_DEMONS)
-
-            elif self.current_state == States.FIGHTING_DEMON:
-                self.fighting_demon_state()
-                time.sleep(0.2)
-
-            # We need the loop to run very fast
-            time.sleep(0.01)
+    def before_state_loop_iteration(self) -> None:
+        self.rotate_demon()

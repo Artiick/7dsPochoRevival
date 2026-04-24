@@ -11,7 +11,6 @@ from utilities.logging_utils import LoggerWrapper
 from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.utilities import (
     capture_window,
-    check_for_reconnect,
     click_im,
     find,
     find_and_click,
@@ -144,39 +143,12 @@ class GuildBossFarmer(IFarmer):
 
     def run(self):
 
-        while True:
-            # Try to reconnect first
-            if not (success := check_for_reconnect()):
-                # We had to restart the game! Let's log back in immediately
-                print("Let's try to log back in immediately...")
-                IFarmer.first_login = True
-
-            # Check if we need to log in again!
-            self.check_for_login_state()
-
-            if self.current_state == States.GOING_TO_GB:
-                self.going_to_gb_state()
-
-            elif self.current_state == States.FINDING_BOSS:
-                self.finding_boss_state()
-
-            elif self.current_state == States.FIGHTING:
-                self.fighting_state()
-
-            elif self.current_state == GlobalStates.DAILY_RESET:
-                self.daily_reset_state()
-
-            elif self.current_state == GlobalStates.CHECK_IN:
-                self.check_in_state()
-
-            elif self.current_state == GlobalStates.DAILIES_STATE:
-                self.dailies_state()
-
-            elif self.current_state == GlobalStates.FORTUNE_CARD:
-                self.fortune_card_state()
-
-            elif self.current_state == GlobalStates.LOGIN_SCREEN:
-                self.login_screen_state(initial_state=States.GOING_TO_GB)
-
-            # We need the loop to run very fast
-            time.sleep(0.7)
+        self.run_state_loop(
+            {
+                States.GOING_TO_GB: self.going_to_gb_state,
+                States.FINDING_BOSS: self.finding_boss_state,
+                States.FIGHTING: self.fighting_state,
+            },
+            login_return_state=States.GOING_TO_GB,
+            sleep_seconds=0.7,
+        )
