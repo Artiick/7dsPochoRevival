@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import threading
 import time
@@ -13,6 +13,7 @@ import utilities.vision_images as vio
 from utilities.bird_fighter import BirdFighter, IFighter
 from utilities.deer_fighter import DeerFighter
 from utilities.dogs_floor4_fighter import DogsFloor4Fighter
+from utilities.dogs_floor4_fighter_whale import DogsFloor4FighterWhale
 from utilities.dogs_floor4_fighting_strategies import DogsFloor4BattleStrategy
 from utilities.fighting_strategies import IBattleStrategy
 from utilities.floor_4_farming_logic import IFloor4Farmer, States
@@ -120,23 +121,35 @@ class DogsFloor4Farmer(IFloor4Farmer):
         DogsFloor4Farmer.roxy_in_team = False
         DogsFloor4Farmer.meli3k_in_team = False
         DogsFloor4Farmer.bluegow_in_team = False
+        self._missing_whale_team_warning_printed = False
+        self._whale_team_confirmed = False
 
-        self.fighter: IFighter = DogsFloor4Fighter(
+        fighter_cls = DogsFloor4FighterWhale if whale else DogsFloor4Fighter
+        self.fighter: IFighter = fighter_cls(
             battle_strategy=battle_strategy,
             callback=self.fight_complete_callback,
         )
 
     def on_ready_to_fight_before_start(self, screenshot):
         if DogsFloor4Farmer.whale:
-            if find(vio.meli3k_in_team, screenshot):
+            if self._whale_team_confirmed:
+                return True
+            DogsFloor4Farmer.meli3k_in_team = find(vio.meli3k_in_team, screenshot)
+            DogsFloor4Farmer.bluegow_in_team = find(vio.bluegow_in_team, screenshot)
+            if DogsFloor4Farmer.meli3k_in_team:
                 print("Meli3k is in the team!")
-                DogsFloor4Farmer.meli3k_in_team = True
-            if find(vio.bluegow_in_team, screenshot):
+            if DogsFloor4Farmer.bluegow_in_team:
                 print("Blue Gowther is in the team!")
-                DogsFloor4Farmer.bluegow_in_team = True
-            if not DogsFloor4Farmer.meli3k_in_team or not DogsFloor4Farmer.bluegow_in_team:
-                print("Whale mode is enabled, but one or more whale team markers were not confirmed.")
-            return
+            if DogsFloor4Farmer.meli3k_in_team and DogsFloor4Farmer.bluegow_in_team:
+                self._missing_whale_team_warning_printed = False
+                self._whale_team_confirmed = True
+                return True
+            print(
+                "Please make sure both OG Blue Gowther and Meliodas 3k (Demon King) "
+                "are in the team before starting the fight"
+            )
+            self.current_state = States.EXIT_FARMER
+            return False
 
         if find(vio.lillia_in_team, screenshot):
             print("Lillia is in the team!")
@@ -144,12 +157,19 @@ class DogsFloor4Farmer(IFloor4Farmer):
         elif find(vio.roxy_in_team, screenshot):
             print("Roxy is in the team!")
             DogsFloor4Farmer.roxy_in_team = True
+        return True
 
     def get_fighter_run_kwargs(self) -> dict:
+        if DogsFloor4Farmer.whale:
+            return {
+                "meli3k_in_team": DogsFloor4Farmer.meli3k_in_team,
+                "bluegow_in_team": DogsFloor4Farmer.bluegow_in_team,
+            }
         return {
-            "whale": DogsFloor4Farmer.whale,
             "lillia_in_team": DogsFloor4Farmer.lillia_in_team,
             "roxy_in_team": DogsFloor4Farmer.roxy_in_team,
-            "meli3k_in_team": DogsFloor4Farmer.meli3k_in_team,
-            "bluegow_in_team": DogsFloor4Farmer.bluegow_in_team,
         }
+
+
+
+

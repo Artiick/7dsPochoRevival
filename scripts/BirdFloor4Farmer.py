@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 
 from utilities.bird_floor4_fighting_strategies import BirdFloor4BattleStrategy
 from utilities.farming_factory import FarmingFactory
@@ -29,3 +29,5 @@ def main():
 if __name__ == "__main__":
 
     main()
+
+

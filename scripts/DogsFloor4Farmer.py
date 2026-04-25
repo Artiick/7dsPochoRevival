@@ -1,6 +1,5 @@
-import argparse
+﻿import argparse
 
-from utilities.dogs_floor4_fighting_strategies import DogsFloor4BattleStrategy
 from utilities.farming_factory import FarmingFactory
 from utilities.floor_4_farmers import DogsFloor4Farmer, States
 
@@ -21,9 +20,14 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.whale:
+        from utilities.dogs_floor4_fighting_strategies_whale import DogsFloor4WhaleBattleStrategy as BattleStrategy
+    else:
+        from utilities.dogs_floor4_fighting_strategies import DogsFloor4BattleStrategy as BattleStrategy
+
     FarmingFactory.main_loop(
         farmer=DogsFloor4Farmer,
-        battle_strategy=DogsFloor4BattleStrategy,
+        battle_strategy=BattleStrategy,
         starting_state=States.GOING_TO_DB,
         max_runs=args.clears,
         extra_clears=args.extra_clears,
@@ -36,3 +40,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+

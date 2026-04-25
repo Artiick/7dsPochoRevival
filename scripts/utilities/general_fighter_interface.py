@@ -127,14 +127,6 @@ class IFighter(abc.ABC):
                 **kwargs,
             )
 
-            consume_reset = getattr(self.battle_strategy, "consume_requested_reset_reason", None)
-            if callable(consume_reset):
-                reset_reason = consume_reset()
-                if reset_reason:
-                    print(reset_reason)
-                    self.current_state = FightingStates.EXIT_FIGHT
-                    return
-
             # Read the card index based on how many empty slots we had at the beginning, and how many we have now
             # TODO: In DOGS, "count_empty_card_slots" doesn't work as well as we want, fixed this somehow.
             print(

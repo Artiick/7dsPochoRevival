@@ -1,4 +1,4 @@
-# =============================================================================
+﻿# =============================================================================
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║                           🆓 FREE SOFTWARE 🆓                           ║
 # ║                                                                          ║
@@ -370,10 +370,9 @@ Tune your gear so you can guarantee that.<br>
 • Links: Escalin > Roxy LR, Meli3k > Sabunak, OG B Gow > R Tarm, Nasi > NOT Esca UR<br>
 • Esca/Meli ATK Crit<br>
 • NB: Gowther MUST BE ATK DEF with a super set (14.5%+ all around)<br>
-• NB2: Nasi MUST BE HP DEF with 15% DEF rolls AND Orb and Belt MUST NOT HAVE A SINGLE HP ROLL. Put UC pieces. 
+• NB2: Nasi MUST BE HP DEF with 15% DEF rolls AND Orb and Belt MUST NOT HAVE A SINGLE HP ROLL. Put UC pieces.
 </p>
-    """,
-    "Dogs Farmer": """
+    """,    "Dogs Farmer": """
 <p><strong>Requirements:</strong><br>
 • Any team works</p>
     """,
@@ -2822,3 +2821,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

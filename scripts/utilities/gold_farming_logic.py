@@ -6,7 +6,6 @@ from utilities.general_farmer_interface import CHECK_IN_HOUR, IFarmer
 from utilities.general_farmer_interface import States as GlobalStates
 from utilities.utilities import (
     capture_window,
-    check_for_reconnect,
     find,
     find_and_click,
     press_key,
@@ -111,37 +110,12 @@ class GoldFarmer(IFarmer):
     def run(self):
         print("Farming Gold!")
 
-        while True:
-            # Try to reconnect first
-            if not (success := check_for_reconnect()):
-                # We had to restart the game! Let's log back in immediately
-                print("Let's try to log back in immediately...")
-                IFarmer.first_login = True
-
-            self.check_for_login_state()
-
-            if self.current_state == States.GOING_TO_DUNGEON:
-                self.going_to_dungeon_state()
-
-            elif self.current_state == States.FIGHTING:
-                self.fighting_state()
-
-            elif self.current_state == States.SETTING_UP_CHECKIN:
-                self.setting_up_checkin_state()
-
-            elif self.current_state == GlobalStates.DAILY_RESET:
-                self.daily_reset_state()
-
-            elif self.current_state == GlobalStates.CHECK_IN:
-                self.check_in_state()
-
-            elif self.current_state == GlobalStates.DAILIES_STATE:
-                self.dailies_state()
-
-            elif self.current_state == GlobalStates.FORTUNE_CARD:
-                self.fortune_card_state()
-
-            elif self.current_state == GlobalStates.LOGIN_SCREEN:
-                self.login_screen_state(initial_state=States.GOING_TO_DUNGEON)
-
-            time.sleep(0.5)
+        self.run_state_loop(
+            {
+                States.GOING_TO_DUNGEON: self.going_to_dungeon_state,
+                States.FIGHTING: self.fighting_state,
+                States.SETTING_UP_CHECKIN: self.setting_up_checkin_state,
+            },
+            login_return_state=States.GOING_TO_DUNGEON,
+            sleep_seconds=0.5,
+        )

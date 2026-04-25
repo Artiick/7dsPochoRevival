@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 
 from utilities.deer_floor4_fighting_strategies import DeerFloor4BattleStrategy
 from utilities.farming_factory import FarmingFactory
@@ -36,3 +36,5 @@ def main():
 if __name__ == "__main__":
 
     main()
+
+

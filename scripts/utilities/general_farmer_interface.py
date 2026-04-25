@@ -14,6 +14,7 @@ from utilities.daily_farming_logic import States as DailyFarmerStates
 from utilities.general_fighter_interface import IFighter
 from utilities.app_config import get_minutes_to_wait_before_login
 from utilities.utilities import (
+    check_for_reconnect,
     click_and_sleep,
     close_game,
     drag_im,
@@ -113,6 +114,68 @@ class IFarmer(metaclass=IFarmerMeta):
         """Return the keepalive deadline timestamp (epoch seconds)."""
         with IFarmer._lock:
             return self._keepalive_until
+
+    def before_state_loop_iteration(self) -> None:
+        """Hook called at the beginning of each shared state-loop iteration."""
+
+    def on_unknown_state(self) -> None:
+        """Raise a clear error when a farmer reaches a state it cannot dispatch."""
+        raise RuntimeError(f"Unknown farmer state: {self.current_state}")
+
+    def handle_global_state(self, login_return_state: States) -> bool:
+        """Handle global farmer states shared by multiple farming loops."""
+        if self.current_state == States.DAILY_RESET:
+            self.daily_reset_state()
+            return True
+
+        if self.current_state == States.CHECK_IN:
+            self.check_in_state()
+            return True
+
+        if self.current_state == States.DAILIES_STATE:
+            self.dailies_state()
+            return True
+
+        if self.current_state == States.FORTUNE_CARD:
+            self.fortune_card_state()
+            return True
+
+        if self.current_state == States.LOGIN_SCREEN:
+            self.login_screen_state(initial_state=login_return_state)
+            return True
+
+        return False
+
+    def run_state_loop(
+        self,
+        state_handlers: dict,
+        *,
+        login_return_state,
+        sleep_seconds=0.6,
+        check_reconnect=True,
+        login_check=True,
+    ):
+        """Run a farmer's local state machine with shared reconnect/login/global-state handling."""
+        while True:
+            if check_reconnect and not check_for_reconnect():
+                print("Let's try to log back in immediately...")
+                IFarmer.first_login = True
+
+            self.before_state_loop_iteration()
+
+            if login_check:
+                self.check_for_login_state()
+
+            if self.handle_global_state(login_return_state):
+                time.sleep(sleep_seconds)
+                continue
+
+            state_handler = state_handlers.get(self.current_state)
+            if state_handler is None:
+                self.on_unknown_state()
+
+            state_handler()
+            time.sleep(sleep_seconds)
 
     def stop_fighter_thread(self):
         """Send a STOP signal to the IFighter thread"""

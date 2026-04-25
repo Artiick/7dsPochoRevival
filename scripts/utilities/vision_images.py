@@ -1,4 +1,4 @@
-from utilities.vision import MultiVision, Vision
+﻿from utilities.vision import MultiVision, Vision
 
 # TODO:
 
@@ -133,9 +133,6 @@ save_party = Vision("demonic_beasts\\save_party.png")
 skip_bird = Vision("demonic_beasts\\skip_masked.png")
 db_loading_screen = Vision("demonic_beasts\\loading_screen.png")
 reset_demonic_beast = Vision("demonic_beasts\\reset_demonic_beast.png")
-floor_3_cleared_2_bird = Vision("demonic_beasts\\floor_3_cleared_2_bird.png")
-floor_3_cleared_2_deer = Vision("demonic_beasts\\floor_3_cleared_2_deer.png")
-floor_3_cleared_2_skollandhati = Vision("demonic_beasts\\floor_3_cleared_2_skollandhati.png")
 floor_3_cleared_db = MultiVision(
     # Bird floor 3 cleared images
     "demonic_beasts\\floor_3_cleared_bird.png",
@@ -156,10 +153,6 @@ creature_destroyed = Vision("demonic_beasts\\creature_destroyed.png")
 defeat = Vision("demonic_beasts\\defeat.png")
 weekly_mission = Vision("demonic_beasts\\lazy_weekly_mission.png")
 skollandhati = Vision("demonic_beasts\\skollandhati.png")
-extra_mode = Vision("demonic_beasts\\extra_mode.png")
-wind_source = Vision("demonic_beasts\\wind_source.png")
-river_source = Vision("demonic_beasts\\river_source.png")
-twilight_source = Vision("demonic_beasts\\twilight_source.png")
 guaranteed_reward = Vision("demonic_beasts\\guaranteed_reward.png")
 meli_aoe = Vision("demonic_beasts\\meli_aoe.png")
 meli_ult = Vision("demonic_beasts\\meli_ult.png")
@@ -170,6 +163,10 @@ stance_active = Vision("demonic_beasts\\stance_active.png")
 immortality_buff = Vision("demonic_beasts\\immortality.png")
 thor_thunderstorm = Vision("demonic_beasts\\thor_thunderstorm.png")
 first_reward = Vision("demonic_beasts\\first_reward.png")
+extra_mode = Vision("demonic_beasts\\extra_mode.png")
+wind_source = Vision("demonic_beasts\\wind_source.png")
+river_source = Vision("demonic_beasts\\river_source.png")
+twilight_source = Vision("demonic_beasts\\twilight_source.png")
 
 # For Deer
 eikthyrnir = Vision("deer\\Eikthyrnir.png")
@@ -240,20 +237,10 @@ empty_slot_15 = Vision("dogs\\empty_slot_15.png")
 empty_slot_16 = Vision("dogs\\empty_slot_16.png")
 empty_slot_17 = Vision("dogs\\empty_slot_17.png")
 empty_slot_18 = Vision("dogs\\empty_slot_18.png")
-dogs_left_target_sel = Vision("dogs\\left_target_sel.png")
-dogs_right_target_sel = Vision("dogs\\right_target_sel.png")
-dogs_right_target_sel2 = Vision("dogs\\right_target_sel2.png")
-dogs_p1targetleft = Vision("dogs\\p1targetleft.png")
 # Dogs Floor 4 + Dogs card templates (Escalin / Thonar). Nasiens: shared nasi_* in Snake section.
 escalin_st = Vision("dogs\\escalin_st.png")
 escalin_aoe = Vision("dogs\\escalin_aoe.png")
 escalin_ult = Vision("dogs\\escalin_ult.png")
-gow_atk = Vision("dogs\\gow_atk.png")
-gow_debuff = Vision("dogs\\gow_debuff.png")
-gow_ult = Vision("dogs\\gow_ult.png")
-meli3k_st = Vision("dogs\\meli3k_st.png")
-meli3k_aoe = Vision("dogs\\meli3k_aoe.png")
-meli3k_ult = Vision("dogs\\meli3k_ult.png")
 thonar_gauge = Vision("dogs\\thonar_gauge.png")
 thonar_stance = Vision("dogs\\thonar_stance.png")
 thonar_ult = Vision("dogs\\thonar_ult.png")
@@ -262,11 +249,21 @@ lillia_st = Vision("dogs\\lillia_st.png")
 cusack_gauge = Vision("dogs\\cusack_gauge.png")
 roxy_in_team = Vision("dogs\\roxy_in_team.png")
 lillia_in_team = Vision("dogs\\lillia_in_team.png")
+lillia_ult = Vision("dogs\\lillia_ult.png")
 meli3k_in_team = Vision("dogs\\meli3k_in_team.png")
 bluegow_in_team = Vision("dogs\\bluegow_in_team.png")
-lillia_ult = Vision("dogs\\lillia_ult.png")
-# Dogs whale strat
+gow_atk = Vision("dogs\\gow_atk.png")
+gow_debuff = Vision("dogs\\gow_debuff.png")
+gow_ult = Vision("dogs\\gow_ult.png")
+meli3k_st = Vision("dogs\\meli3k_st.png")
+meli3k_aoe = Vision("dogs\\meli3k_aoe.png")
+meli3k_ult = Vision("dogs\\meli3k_ult.png")
 dogs_escalin_talent = Vision("dogs\\escalin_talent.png")
+dogs_left_target_sel = Vision("dogs\\left_target_sel.png")
+dogs_right_target_sel = Vision("dogs\\right_target_sel.png")
+dogs_right_target_sel2 = Vision("dogs\\right_target_sel2.png")
+dogs_p1targetleft = Vision("dogs\\p1targetleft.png")
+# Dogs whale strat
 freeze_icon = Vision("dogs\\freeze_icon.png")
 lolimerl_aoe = Vision("dogs\\lolimerl_aoe.png")
 lolimerl_st = Vision("dogs\\lolimerl_st.png")
@@ -438,22 +435,12 @@ shop = Vision("dailies\\shop.png")
 auto_clear = Vision("dailies\\auto_clear.png")
 strart_auto_clear = Vision("dailies\\start_auto_clear.png")
 quests = Vision("dailies\\quests.png")
-daily_pvp = MultiVision("dailies\\daily_pvp.png", "dailies\\daily_pvp_new.png", image_name="daily_pvp")
+daily_pvp = Vision("dailies\\daily_pvp.png")
 daily_boss_battle = Vision("dailies\\daily_boss_battle.png")
-daily_fort_solgress = MultiVision(
-    "dailies\\daily_fort_solgress.png", "dailies\\daily_fort_solgress_new.png", image_name="daily_fort_solgress"
-)
-daily_friendship_coins = MultiVision(
-    "dailies\\daily_friendship_coins.png",
-    "dailies\\daily_friendship_coins_new.png",
-    image_name="daily_friendship_coins",
-)
-daily_patrol = MultiVision("dailies\\daily_patrol.png", "dailies\\daily_patrol_new.png", image_name="daily_patrol")
-daily_vanya_ale = MultiVision(
-    "dailies\\daily_vanya_ale.png",
-    # "dailies\\daily_vanya_ale_new.png",
-    image_name="daily_vanya_ale",
-)
+daily_fort_solgress = Vision("dailies\\daily_fort_solgress.png")
+daily_friendship_coins = Vision("dailies\\daily_friendship_coins.png")
+daily_patrol = Vision("dailies\\daily_patrol.png")
+daily_vanya_ale = Vision("dailies\\daily_vanya_ale.png")
 take_all_rewards = Vision("dailies\\take_all.png")
 tasks = Vision("dailies\\tasks.png")
 daily_tasks = Vision("dailies\\daily_tasks.png")
@@ -462,6 +449,7 @@ fortune_card = Vision("dailies\\fortune_card.png")
 blue_stone = Vision("dailies\\blue_stone.png")
 search_for_a_kh = Vision("dailies\\search_for_a_kh.png")
 participate = Vision("dailies\\participate.png")
+daily_complete = Vision("dailies\\daily_complete.png")
 # Daily boss fight
 boss_battle = Vision("dailies\\boss_battle.png")
 normal_diff_boss_battle = Vision("dailies\\normal_difficulty.png")
@@ -533,3 +521,4 @@ ok_main_button = MultiVision(
     "ok_buttons\\ok_maintenance.png",
     image_name="Ok button",
 )
+
